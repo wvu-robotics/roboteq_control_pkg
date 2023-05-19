@@ -1,0 +1,13 @@
+
+# Build files
+
+build
+install
+log
+
+# miscellaneous
+
+src/.rosinstall
+src/CMakeLists.txt
+.catkin_workspace
+.vscode

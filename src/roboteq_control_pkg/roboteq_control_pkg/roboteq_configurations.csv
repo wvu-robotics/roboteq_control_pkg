@@ -1,0 +1,48 @@
+ALIM,Channel Limit,Amps Limit
+ATGA,Channel Action,Amps Trigger Action
+ATGD,Channel Delay,Amps Trigger Delay
+ATRIG,Channel Level,Amps Trigger Level
+BKD,Delay,Brake Delay
+BPR,Channel Value,Bypass Trajectory/Ramp
+BRV,Channel Voltage,Brake Release Voltage
+BHV,Channel Voltage,Brake Hold Voltage
+BDT,Channel Delay,Brake Delay Time
+BLFB,Channel Sensor,Closed Loop Feedback Sensor
+BLSTD,Channel Mode,Stall Detection
+CLERD,Channel Mode,Close Loop Error Detection
+EDEC,Channel Decelearion,Motor Fault Deceleration Rate
+EHL,Channel Value,Encoder Max Limit
+EHLA,Channel Action,Encoder Action at Max
+EHOME,Channel Value,Encoder Home Count
+ELL,Channel Value,Encoder Min Limit
+ELLA,Channel Action,Encoder Action at Min
+EMOD,Channel Use,Encoder Usage
+EPPR,Channel Value,Encoder Pulse/Rev Value
+ICAP,Channel Cap,PID Integrator Limit
+KDG,PID Channel Gain,PID Differential Gain
+KIG,PID Channel Gain,PID Integral Gain
+KPG,PID Channel Gain,PID Proportional Gain
+MAC,Channel Acceleration,Motor Acceleration Rate
+MDEC,Channel Deceleration,Motor Deceleration Rate
+MLX,InputNbr Value,Molex Input
+MMOD,Channel Mode,Operating Mode
+MNRPM,Channel RPM,Min Speed RPM Value
+MVEL,Channel Velocity,Position Mode Velocity
+MXMD,Mode,Mixed Mode
+MXPF,Channel MaxPower,Motor Max Power Forward
+MXPR,Channel MaxPower,Motor Max Power Reverse
+MXRPM,Channel RPM,Max Speed RPM
+MXTRN,Channel Turns,Position Turns Min to Max
+OVH,Voltage,Overvoltage hysteresis
+OVL,Voltage,Overvoltage Limit
+OTL,Temperature,Over Temperature Limit
+SCPR,Channel Value,SSI Sensor Resolution
+SED,Channel Value,Sensor Error Detection
+SHL,Channel Value,SSI Sensor Max Limit
+SHLA,Channel Action,SSI Sensor Action at Max
+SHOME,Channel Value,SSI Sensor Home Count
+SLL,Channel Value,SSI Sensor Min Limit
+SLLA,Channel Action,SSI Sensor Action at Min
+SMOD,Channel Use,SSI Sensor Usage
+TNM,Channel Constant,Motor Torque Constant
+UVL,Voltage,Undervoltage Limit

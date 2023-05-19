@@ -1,0 +1,34 @@
+AC,Channel Acceleration,Set Acceleration
+AX,Channel Acceleration,Next Acceleration
+B,VarNbr Value Set User,Boolean Variable
+BND,None,Spectrum Bind
+C,Channel Value,Set Encoder Counters
+CB,Channel Value,Set Brushless Counter
+CG,Channel Value,Set Motor Command via CAN
+CS,Element Value,CAN Send
+CSS,Channel Value,Set SSI Sensor Counter
+CU,Element Value,Raw Redirect Send
+D0,OutputNbr,Reset Individual Digital Out bits
+D1,OutputNbr,Set Individual Digital Out bits
+DC,Channel Deceleration,Set Deceleration
+DS,Value,Set all Digital Out bits
+DX,Channel Value,Next Decceleration
+EES,None,Save Confguration in EEPROM
+EX,None,Emergency Shutdown
+G,Channel Value,Go to Speed or to Relative Position
+GIQ,Channel Value,Go to Torque Amps
+GID,Channel Value,Go to Flux Amps
+H,Channel,Load Home counter
+MG,None,Emergency Stop Release
+MS,Channel,Stop in all modes
+P,Channel Destination,Go to Absolute Desired Position
+PR,Channel Delta,Go to Relative Desired Position
+PRX,Channel Delta,Next Go to Relative Desired Position
+PX,Channel Delta,Next Go to Absolute Desired Position
+R,[Option],MicroBasic Run
+RC,Channel Value,Set Pulse Out
+S,Channel Value,Set Motor Speed
+SFT,Channel Value,Safety Stop
+STT,None,STO Self-Test
+SX,Channel Value,Next Velocity
+VAR,VarNbr Value,Set User Variable
