@@ -1,0 +1,14 @@
+CLMOD,None,Motor/Sensor Setup
+CLRST,Key,Reset configuration to factory defaults
+CLSAV,Key,Save calibrations to Flash
+DFU,Key,Update Firmware via USB
+EELD,None,Load Parameters from EEPROM
+EELOG,None,Dump Flash Log Data
+EERST,Key,Reset Factory Defaults
+EESAV,None,Save Configuration in EEPROM
+ERASE,None,Erase Flash Log Data
+LK,Key,Lock Configuration Access
+RESET,Key,Reset Controller
+SLD,Key,Script Load
+STIME,Time,Set Time
+UK,Key,Unlock Configuration Access

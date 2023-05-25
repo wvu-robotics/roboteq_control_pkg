@@ -1,0 +1,29 @@
+BADJ,Channel Angle,Brushless Angle Zero Adjust
+BADV,Channel Value,Brushless timing angle adjust
+BECC,Channel Value,BEMF Coupling Constant
+BFBK,Channel Sensor,Brushless Sinusoidal Angle Sensor
+BHL,Channel Value,Brushless Internal Sensor Max Limit
+BHLA,Channel Action,Brushless Internal Sensor Action at Max
+BHOME,Channel Value,Brushless Internal Sensor Home Count
+BLL,Channel Value,Brushless Internal Sensor Min Limit
+BLLA,Channel Action,Brushless Internal Sensor Action at Min
+BMOD,Channel Mode,Brushless Switching Mode
+BPOL,Channel NbrPoles,Number of pole pairs
+BZPW,Channel Amps,Brushless Reference Seek Power
+HPO,InputNbr Value,Hall Sensor Position Type
+HSAT,InputNbr Value,Hall Sensor Angle Table
+HSM,InputNbr Value,Hall Sensor Map
+KIF,PID Channel Gain,Current PID Integral Gain
+KPF,PID Channel Gain,Current PID Proportional Gain
+LD,Channel Value,D-axis motor Inductance
+LQ,Channel Value,Q-axis motor Inductance
+PSA,Channel Angle,Phase Shift Angle
+RS,Channel Value,Motor Stator Resistance
+SPOL,Channel Poles,SinCos/SSI Sensor Poles
+SSF,Channel Frequency,Sensorless Start-Up Frequency
+SVT,Channel Value,BEMF Integrator Limit
+SWD,InputNbr Value,Swap Windings
+TID,Channel Amps,FOC Target Id
+VK,Channel Value,Motor Voltage constant
+ZSMA,Channel Value,Cos Amplitude
+ZSMC,InputNbr Value,SinCos Calibration

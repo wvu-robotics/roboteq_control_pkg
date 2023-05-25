@@ -1,0 +1,26 @@
+ACS,Enable,Analog Center Command to Start
+AMS,Enable,Analog keep within Guard Bands
+BEE,Address Value,User Storage in Battery Backed RAM
+BRUN,Enable,Script Auto-Start
+CLIN,Channel,Linearity Command Linearity
+CPRI,Level Command,Command Priorities
+DFC,Channel Value,Default Command value
+DMOD,Mode,Modbus Mode
+ECHOF,OffOn,Enable/Disable Serial Echo
+EE,Address Data,User-Defined Values
+ISM,None,Raw Redirect Mode
+MDAL,Option,Modbus Data Alignment
+MNOD,ID,Modbus Slave ID
+PMS,Enable,Pulse keep within Min & Max Safety
+RS485,Enable,Enable RS485
+RSBR,BitRate,Set RS232/RS485 baudrate
+RWD,Timeout,Serial Data Watchdog
+SCRO,Port,Select Print output port for scripting
+SKCTR,Channel Center,Spektrum Center
+SKDB,Channel Deadband,Spektrum Deadband
+SKLIN,Channel Linearity,Spektrum Linearity
+SKMAX,Channel Max,Spektrum Max
+SKMIN,Channel Min,Spektrum Min
+SKUSE,Channel Port,Assign Spektrum port to motor command
+STO,Enable,Safe Torque Off
+TELS,String,Telemetry string

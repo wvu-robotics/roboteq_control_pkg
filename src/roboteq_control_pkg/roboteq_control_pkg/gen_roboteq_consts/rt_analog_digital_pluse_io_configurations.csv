@@ -1,0 +1,24 @@
+ACTR,InputNbr Center,Analog Input Center (0)
+ADB,InputNbr Deadband,Analog Input Deadband
+AINA,InputNbr Use,Analog Input Use
+ALIN,InputNbr Linearity,Analog Input Linearity
+AMAX,InputNbr Max,Analog Input Max
+AMAXA,InputNbr Action,Analog Input Action at Max
+AMIN,InputNbr Min,Analog Input Min
+AMINA,InputNbr Action,Analog Input Action at Min
+AMOD,InputNbr Mode,Analog Conversion Type
+APOL,InputNbr Polarity,Analog Input Conversion Polarity
+DINA,InputNbr Action,Digital Input Action
+DINL,ActiveLevels,Digital Input Active Level
+DOA,OutputNbr Action,Digital Output Action
+DOL,ActiveLevels,Digital Outputs Active Level
+PCTR,InputNbr Center,Pulse Input Center
+PDB,InputNbr Deadband,Pulse Input Deadband
+PINA,InputNbr Use,Pulse Input Use
+PLIN,InputNbr Linearity,Pulse Input Linearity
+PMAX,InputNbr Max,Pulse Input Max
+PMAXA,InputNbr Action,Pulse Input Action at Max
+PMIN,InputNbr Min,Pulse Input Min
+PMINA,InputNbr Action,Pulse Input Action at Min
+PMOD,InputNbr Mode,Pulse Input Capture Type
+PPOL,InputNbr Polarity,Pulse Input Capture Polarity

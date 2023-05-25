@@ -1,0 +1,11 @@
+CAS,Rate,CANOpen Auto start
+CBR,BitRate,CAN Bit Rate
+CEN,Mode,CAN Mode
+CHB,HeartBeat,CAN Heartbeat
+CHLA,Action,CAN Consumer Heartbeat Lost Action
+CLSN,Address,CAN Listen Node ID
+CNOD,Address,CAN Node ID
+CSRT,Rate,MiniCAN SendRate
+CTPS,TPDOnbr Rate,CANOpen TPDO SendRate
+CTT,None,CANOpen Transmission Type
+FSA,None,DS402 FSA

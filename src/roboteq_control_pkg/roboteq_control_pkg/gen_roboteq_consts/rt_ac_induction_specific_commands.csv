@@ -1,0 +1,8 @@
+BFBK,Channel Mode,AC Induction Operating Mode
+ILM,Inductance,Mutual Inductance
+ILLR,Inductance,Rotor Leakage Inductance
+IRR,Resistance,Rotor Resistance
+MPW,MotorPower,Minimum Power
+MXS,SlipFrequency,Optimal Slip Frequency
+RFC,Channel Amps,Rotor,Flux,Current
+VPH Channel Ratio,AC,Induction,Volts,per,Hertz

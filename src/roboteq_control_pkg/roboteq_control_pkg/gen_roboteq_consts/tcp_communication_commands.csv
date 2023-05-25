@@ -1,0 +1,8 @@
+DHCP,Enable,Enable DHCP
+GWA,IP Octet,Gateway Address
+IPA,IP Octet,IP Address
+IPP,None,IP Port
+PDNS,IP Octet,Primary DNS
+SBM,IP Octet,Subnet Mask
+SDNS,IP Octet,Secondary DNS
+WMOD,Mode,TCP Mode
