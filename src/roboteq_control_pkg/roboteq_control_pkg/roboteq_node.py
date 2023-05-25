@@ -1,11 +1,15 @@
 import rclpy.node
 import serial 
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import *
+from nav_msgs.msg import Odometry
+from tf2_ros import TransformBroadcaster
+import numpy as np
+import math
+
 
 LEFT_PORT = '/dev/left_roboteq'
 RIGHT_PORT = '/dev/right_roboteq'
 TIMEOUT = 5
-
 STOP_COMMANDS = f"!G 1 0\r!G 2 0\r"
 
 
@@ -16,6 +20,8 @@ class Roboteq_Node(rclpy.node.Node):
 
         self.declare_parameter('cmdvel_topic', 'cmd_vel')
         self.declare_parameter('odom_topic', 'odom')
+        self.declare_parameter('tf_topic', '')
+
 
         self.declare_parameter('left_roboteq_port', LEFT_PORT)
         self.declare_parameter('right_roboteq_port', RIGHT_PORT)
@@ -30,6 +36,7 @@ class Roboteq_Node(rclpy.node.Node):
             baudrate = self.get_parameter('baud').get_parameter_value().integer_value,
             timeout= TIMEOUT,
         )
+
         self.right_port = serial.Serial(            
             port = self.get_parameter('right_roboteq_port').get_parameter_value().string_value,
             baudrate = self.get_parameter('baud').get_parameter_value().integer_value,
@@ -44,11 +51,43 @@ class Roboteq_Node(rclpy.node.Node):
             )
         
         self.odom_pub = self.create_publisher(
-            msg_type= Twist,
+            msg_type= Odometry,
             topic = self.get_parameter('odom_topic').get_parameter_value().string_value,
             qos_profile = 10
             )
+        
+        self.rel_time = self.get_clock().now() # use this to calculate delta_t for odom
+        self.timer = self.create_timer(.001, self.generate_odom_and_tf)
+
+        self.tf_broadcaster = TransformBroadcaster(self)
+
         self.connect_serial()
+
+    def generate_odom_and_tf(self):
+
+
+        
+
+        def publish_odom(self, x, y, z, quat_x, quat_y, quat_z, quat_w):
+
+            odom_message = Odometry()
+            odom_message.header.stamp = self.get_clock().now().to_msg()
+
+            odom_message.pose.pose.position.x = x
+            odom_message.pose.pose.position.y = y
+            odom_message.pose.pose.position.z = z 
+
+            odom_message.pose.pose.orientation.x = quat_x
+            odom_message.pose.pose.orientation.y = quat_y
+            odom_message.pose.pose.orientation.z = quat_z
+            odom_message.pose.pose.orientation.w = quat_w
+
+            self.odom_pub.publish()
+
+
+       
+
+
 
 
     def connect_serial(self):
@@ -100,9 +139,6 @@ class Roboteq_Node(rclpy.node.Node):
         self.get_logger().info('Configuring motor')
 
 
-    # def read_values(self):
-
-
     def cmd_vel_callback(self, twist_msg: Twist):
 
         self.get_logger().info('Recieved twist message: \n' + str(twist_msg))
@@ -129,6 +165,7 @@ class Roboteq_Node(rclpy.node.Node):
 
         except serial.SerialException as serExcpt:
             self.get_logger().warn('serial.SerialException: %s' % str(serExcpt))
+
 
 def main(args=None):
 
