@@ -58,15 +58,15 @@ def generate_dict_from_csv(new_file_name: str, csv_files: list[str], dict_names:
         dict_contents = dict_names[curr_dict_index] + " = " + str(curr_dict)
 
         # Place newline characters after each dictionary key/value pair
-        dict_contents = dict_contents.replace(",",", \n")
+        dict_contents = dict_contents.replace(",",",\n")
         # Make curly brakets have their own line (start of dictionary)
-        dict_contents = dict_contents.replace("{","{\n")
+        dict_contents = dict_contents.replace("{","{\n ")
         # Make curly brakets have their own line (end of dictionary)
-        dict_contents = dict_contents.replace("}","\n}")
+        dict_contents = dict_contents.replace("}","\n   }\n")
 
         # Write the dictionary to the new constants file
         new_file.write(dict_contents + "\n")
-        
+
         # Clear the memory address to eliminate any weird python dictionary behaviors
         del curr_dict 
 
