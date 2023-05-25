@@ -20,12 +20,14 @@ CAN Communication Commands                    page 391
 TCP Communication Commands                    page 397  
 '''
 
-# CSV format:
+# Tables from the manual above were converted to CVS files for use in this script
+
+# The CSV files follow the following format:
 # Command, Arguments, Description
 
 import csv
 
-def generate_dict_from_csv(new_file_name: str, csv_files: list[str], dict_names: list[str]):
+def generate_dict_from_csv(header_string: str, header_body: str, new_file_name: str, csv_files: list[str], dict_names: list[str]):
 
     # Input validation: Checking to see if the lengths of the lists are the same
     if len(csv_files) != len(dict_names):
@@ -34,6 +36,9 @@ def generate_dict_from_csv(new_file_name: str, csv_files: list[str], dict_names:
     # Open the new constants file in write mode
     # No need for FileNotFoundError, python will create file where you tell it, or overwrite existing contents
     new_file = open(new_file_name, "w")
+
+    new_file.write(header_string)
+    new_file.write(header_body)
     
     # Iterating through the csv files 
     for curr_dict_index in range(len(csv_files)):
@@ -70,7 +75,25 @@ def generate_dict_from_csv(new_file_name: str, csv_files: list[str], dict_names:
         # Clear the memory address to eliminate any weird python dictionary behaviors
         del curr_dict 
 
+
 generate_dict_from_csv(
+
+    header_string= "# roboteq_constants.py \n# By: Nathan Adkins \n# WVU IRL\n\n",
+    header_body='''\'\'\'\nRoboteq User Manual: https://www.roboteq.com/docman-list/motor-controllers-documents-and-files/documentation/user-manual/272-roboteq-controllers-user-manual-v21/file
+
+Runtime Commands                              page 188  
+DS402 Runtime Commands                        page 209  
+Runtime Queries                               page 222  
+DS402 Runtime Queries                         page 268  
+Query History Commands                        page 286  
+Maintenance Commands                          page 289  
+General Configuration and Safety              page 296  
+Analog, Digital, Pulse IO Configurations      page 312  
+Motor Configurations                          page 330  
+Brushless Secific Commands                    page 364  
+AC Induction Specific Commands                page 385  
+CAN Communication Commands                    page 391  
+TCP Communication Commands                    page 397\n\'\'\'\n\n''',
 
     new_file_name= "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/roboteq_constants.py",
 
