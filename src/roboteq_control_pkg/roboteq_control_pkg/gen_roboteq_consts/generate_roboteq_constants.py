@@ -110,7 +110,7 @@ TCP Communication Commands                    page 397\n\'\'\'\n\n''',
         "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_motor_configurations.csv",
         "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_runtime_commands.csv",
         "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_runtime_queries.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/tcp_communication_commands.csv",
+        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_tcp_communication_commands.csv",
         ],
 
     dict_names= 
