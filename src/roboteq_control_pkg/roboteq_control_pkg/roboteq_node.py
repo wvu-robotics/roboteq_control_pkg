@@ -5,7 +5,12 @@ from nav_msgs.msg import Odometry
 from tf2_ros import TransformBroadcaster
 import numpy as np
 import math
+from roboteq_constants import *
 
+# For roboteq commands.
+MAX_RUNTIME_COMMANDS_LENGTH = 3
+MAX_RUNTIME_QUERIES_LENGTH = 3
+MAX_MAINTENANCE_COMMAND_LENGTH = 3
 
 LEFT_PORT = '/dev/left_roboteq'
 RIGHT_PORT = '/dev/right_roboteq'
@@ -30,6 +35,8 @@ class Roboteq_Node(rclpy.node.Node):
         self.declare_parameter('wheel_circumference', 0.55)
         self.declare_parameter('wheel_radius',0.0875)
         self.declare_parameter('track_width', 0.445)
+
+        self.motor_count = 2
 
         self.left_port = serial.Serial(
             port = self.get_parameter('left_roboteq_port').get_parameter_value().string_value,
@@ -65,9 +72,14 @@ class Roboteq_Node(rclpy.node.Node):
 
     def generate_odom_and_tf(self):
 
-
-        
-
+        """
+        Get the velocity info from roboteqs. Then calculate pose change. Add to pose and publish.
+        Then broadcast the TF.
+        """
+       # Get all four wheel RPMS
+        motors_rpm_command = RUNTIME_QUERIES.get('Read Encoder Motor Speed in RPM') # This turns into the letter 'S'.
+        wheel_l_1, wheel_l_2 = self.write_runtime_query(motors_rpm_command) # What side? What front back. Don't know. Come back.
+       
         def publish_odom(self, x, y, z, quat_x, quat_y, quat_z, quat_w):
 
             odom_message = Odometry()
@@ -82,13 +94,65 @@ class Roboteq_Node(rclpy.node.Node):
             odom_message.pose.pose.orientation.z = quat_z
             odom_message.pose.pose.orientation.w = quat_w
 
-            self.odom_pub.publish()
+            self.odom_pub.publish(odom_message)
+            
+            # Publish the TF here.
+            
+            
 
 
-       
+    # Write commands to roboteq.
+    def write_runtime_command(self, cmd_str: str, cmd_vals: list[str]):
+        runtime_char = '!'
+        if len(cmd_str) > MAX_RUNTIME_COMMANDS_LENGTH:
+            Exception("Invalid command length for runtime commands.")
+        motor_cmd_string = ''
+        for motor_num in range(self.motor_count):
+            motor_cmd_string += f'{runtime_char}{cmd_str} {motor_num+1} {cmd_vals[motor_num]}\r'
+        self.left_port.write(motor_cmd_string.encode())
+        self.right_port.write(motor_cmd_string.encode())
 
 
+    def write_runtime_query(self, cmd_str: str):
+        query_char = '?'
+        if len(cmd_str) > MAX_RUNTIME_QUERIES_LENGTH:
+            Exception("Invalid command length for runtime queries.")
+        #motor_cmd_string = ''
+        #for motor_num in range(self.motor_count):
+        #    motor_cmd_string += f'{query_char}{cmd_str} {motor_num+1}\r'
 
+        motor_cmd_string1 = '?S 1\r'
+        motor_cmd_string2 = '?S 2\r'
+        self.write_runtime_command('G',[1000,1000])
+
+        self.left_port.write(motor_cmd_string1.encode())
+        left_mot_1 = self.left_port.read_until(b"\r")
+        self.left_port.write(motor_cmd_string2.encode())
+        left_mot_2 = self.left_port.read_until(b"\r")
+        self.right_port.write(motor_cmd_string1.encode())
+        right_mot_1 = self.left_port.read_until(b"\r")
+        self.right_port.write(motor_cmd_string2.encode())
+        right_mot_2 = self.left_port.read_until(b"\r")
+
+     
+        #print(right_mot_2)
+        #y = self.right_port.write(motor_cmd_string.encode())
+        
+        return ([left_mot_1.decode(), left_mot_2.decode(), right_mot_1.decode(), right_mot_2.decode()])
+        #return (self.left_port.write(motor_cmd_string.encode())), (self.right_port.write(motor_cmd_string.encode()))
+
+
+    def write_maintenance_command(self, cmd_str: str):
+        maint_char = '%'
+        safety_key = '321654987' 
+        if len(cmd_str) > MAX_MAINTENANCE_COMMAND_LENGTH:
+            Exception("Invalid command length for maintenance commands.")
+        motor_cmd_string = ''
+        for motor_num in range(self.motor_count):
+            motor_cmd_string += f'{maint_char}{cmd_str} {safety_key} \r'
+        
+        print(self.left_port.read_until(b"r"))
+        print(self.right_port.read_until(b"r"))
 
     def connect_serial(self):
 
@@ -172,9 +236,21 @@ def main(args=None):
     rclpy.init(args=args)
 
     roboteq_node = Roboteq_Node()
+    speed_list = []
+    for each in range(600):
+        speed_val = roboteq_node.write_runtime_query('S')
+        speed_list.append(speed_val)
+    for each in speed_list:
+        print(each)
+    #print(speed_list)
+    #print(type(x))
+    #print(type(y))
+    #print(str(x))
+    #print(str(y))
+    #print(str(roboteq_node.write_runtime_query('S')))
     # roboteq_node.get_logger().info('waiting to recieve')
 
-    rclpy.spin(roboteq_node)
+   #rclpy.spin(roboteq_node)
 
     roboteq_node.disconnect_serial()
 

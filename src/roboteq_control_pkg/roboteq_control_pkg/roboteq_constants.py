@@ -18,6 +18,7 @@ Brushless Secific Commands                    page 364
 AC Induction Specific Commands                page 385  
 CAN Communication Commands                    page 391  
 TCP Communication Commands                    page 397
+Motor RPM speed read                          page 259
 '''
 
 AC_INDUCTION_SPECIFIC_COMMANDS = {
