@@ -4,9 +4,9 @@ from geometry_msgs.msg import *
 from nav_msgs.msg import Odometry
 from tf2_ros import TransformBroadcaster
 import numpy as np
+
 import math
-from roboteq_constants import *
-import tf
+from .roboteq_constants import *
 
 # For roboteq commands.
 MAX_RUNTIME_COMMANDS_LENGTH = 3
@@ -72,7 +72,7 @@ class Roboteq_Node(rclpy.node.Node):
             )
         
         self.rel_time = self.get_clock().now() # use this to calculate delta_t for odom
-        self.timer = self.create_timer(.001, self.generate_odom_and_tf)
+        self.timer = self.create_timer(.01, self.generate_odom_and_tf)
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
@@ -122,7 +122,7 @@ class Roboteq_Node(rclpy.node.Node):
         
         quats = self.quaternion_from_euler(0,0, self.theta)
         
-        self.publish_odom(self.X_pos, self.y_pos, 0, quats) 
+        self.publish_odom(self.x_pos, self.y_pos, 0.0, quats) 
        
         # Publish the TF here.
             
@@ -136,13 +136,19 @@ class Roboteq_Node(rclpy.node.Node):
         odom_message.pose.pose.position.x = x
         odom_message.pose.pose.position.y = y
         odom_message.pose.pose.position.z = z 
+        quat_message = Quaternion()
+        quat_message.x = quats[0]
+        quat_message.y = quats[1]
+        quat_message.z = quats[2]
+        quat_message.w = quats[3]
 
-        odom_message.pose.pose.orientation = quats # Hopefully this works.
-
+        odom_message.pose.pose.orientation = quat_message
+                
+        print("I am pubbing to odom dawg")
         self.odom_pub.publish(odom_message)
 
 
-    def quaternion_from_euler(ai, aj, ak):
+    def quaternion_from_euler(self, ai, aj, ak):
         ai /= 2.0
         aj /= 2.0
         ak /= 2.0
@@ -191,19 +197,19 @@ class Roboteq_Node(rclpy.node.Node):
         self.write_runtime_command('G',[1000,1000])
 
         self.left_port.write(motor_cmd_string1.encode())
-        left_mot_1 = self.left_port.read_until(b"\r").replace("+","0")
+        left_mot_1 = self.left_port.read_until(b'\r').replace(b'+',b'0')
         self.left_port.write(motor_cmd_string2.encode())
-        left_mot_2 = self.left_port.read_until(b"\r").replace("+","0")
+        left_mot_2 = self.left_port.read_until(b'\r').replace(b'+',b'0')
         self.right_port.write(motor_cmd_string1.encode())
-        right_mot_1 = self.left_port.read_until(b"\r").replace("+","0")
+        right_mot_1 = self.left_port.read_until(b'\r').replace(b'S=+',b'0')
         self.right_port.write(motor_cmd_string2.encode())
-        right_mot_2 = self.left_port.read_until(b"\r").replace("+","0")
+        right_mot_2 = self.left_port.read_until(b'\r').replace(b'S=+',b'0')
 
      
         #print(right_mot_2)
         #y = self.right_port.write(motor_cmd_string.encode())
         
-        return ([left_mot_1.decode(), left_mot_2.decode(), right_mot_1.decode(), right_mot_2.decode()])
+        return ([int(left_mot_1.decode()), int(left_mot_2.decode()), int(left_mot_1.decode()), int(left_mot_2.decode())])
         #return (self.left_port.write(motor_cmd_string.encode())), (self.right_port.write(motor_cmd_string.encode()))
 
 
@@ -301,12 +307,12 @@ def main(args=None):
     rclpy.init(args=args)
 
     roboteq_node = Roboteq_Node()
-    speed_list = []
-    for each in range(600):
-        speed_val = roboteq_node.write_runtime_query('S')
-        speed_list.append(speed_val)
-    for each in speed_list:
-        print(each)
+    #speed_list = []
+   # for each in range(6000):
+   #     speed_val = roboteq_node.write_runtime_query('S')
+   #     speed_list.append(speed_val)
+   # for each in speed_list:
+   #     print(each)
     #print(speed_list)
     #print(type(x))
     #print(type(y))
@@ -315,7 +321,7 @@ def main(args=None):
     #print(str(roboteq_node.write_runtime_query('S')))
     # roboteq_node.get_logger().info('waiting to recieve')
 
-   #rclpy.spin(roboteq_node)
+    rclpy.spin(roboteq_node)
 
     roboteq_node.disconnect_serial()
 
