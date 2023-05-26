@@ -6,6 +6,7 @@ from tf2_ros import TransformBroadcaster
 import numpy as np
 import math
 from roboteq_constants import *
+import tf
 
 # For roboteq commands.
 MAX_RUNTIME_COMMANDS_LENGTH = 3
@@ -34,9 +35,16 @@ class Roboteq_Node(rclpy.node.Node):
 
         self.declare_parameter('wheel_circumference', 0.55)
         self.declare_parameter('wheel_radius',0.0875)
-        self.declare_parameter('track_width', 0.445)
+        self.declare_parameter('track_radius', 0.445)
+        self.declare_parameter('track_width', 2*0.445)
 
         self.motor_count = 2
+
+        # Our position
+        self.x_pos = 0
+        self.y_pos = 0
+        self.theta = 0
+
 
         self.left_port = serial.Serial(
             port = self.get_parameter('left_roboteq_port').get_parameter_value().string_value,
@@ -77,28 +85,85 @@ class Roboteq_Node(rclpy.node.Node):
         Then broadcast the TF.
         """
        # Get all four wheel RPMS
+
+        delta_time = 0.01 # Come back to this
+
         motors_rpm_command = RUNTIME_QUERIES.get('Read Encoder Motor Speed in RPM') # This turns into the letter 'S'.
-        wheel_l_1, wheel_l_2 = self.write_runtime_query(motors_rpm_command) # What side? What front back. Don't know. Come back.
+        wheel_velocities = self.write_runtime_query(motors_rpm_command) # What side? What front back. Don't know. Come back.
+
+
+
+        # Get the average of the RPM for each side.
+        omega_r_avg = sum(wheel_velocities[0:1]) / 2
+        omega_l_avg = sum(wheel_velocities[2:3]) / 2
+
+        # Get the translational velocities for each side (m/s)
+        V_r = omega_r_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value
+        V_l = omega_l_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value
+
+        # Get the total linear velocity of the robot body using both sides.
+        V_avg = (V_r + V_l) / 2
+
+        delta_theta = (V_r - V_l) / self.get_parameter('track_width').get_parameter_value().double_value * delta_time
+
+        self.theta += delta_theta
+
+        # Get the components of translational velocity using our current theta.
+        V_x = V_avg * math.cos(self.theta)
+        V_y = V_avg * math.sin(self.theta)
+
+        # Now find our pose change using the velocities
+        X_delta = V_x * delta_time
+        Y_delta = V_y * delta_time
+
+        # Now update our position.
+        self.x_pos += X_delta
+        self.y_pos += Y_delta
+        
+        quats = self.quaternion_from_euler(0,0, self.theta)
+        
+        self.publish_odom(self.X_pos, self.y_pos, 0, quats) 
        
-        def publish_odom(self, x, y, z, quat_x, quat_y, quat_z, quat_w):
-
-            odom_message = Odometry()
-            odom_message.header.stamp = self.get_clock().now().to_msg()
-
-            odom_message.pose.pose.position.x = x
-            odom_message.pose.pose.position.y = y
-            odom_message.pose.pose.position.z = z 
-
-            odom_message.pose.pose.orientation.x = quat_x
-            odom_message.pose.pose.orientation.y = quat_y
-            odom_message.pose.pose.orientation.z = quat_z
-            odom_message.pose.pose.orientation.w = quat_w
-
-            self.odom_pub.publish(odom_message)
-            
-            # Publish the TF here.
+        # Publish the TF here.
             
             
+
+    def publish_odom(self, x, y, z, quats):
+
+        odom_message = Odometry()
+        odom_message.header.stamp = self.get_clock().now().to_msg()
+
+        odom_message.pose.pose.position.x = x
+        odom_message.pose.pose.position.y = y
+        odom_message.pose.pose.position.z = z 
+
+        odom_message.pose.pose.orientation = quats # Hopefully this works.
+
+        self.odom_pub.publish(odom_message)
+
+
+    def quaternion_from_euler(ai, aj, ak):
+        ai /= 2.0
+        aj /= 2.0
+        ak /= 2.0
+        ci = math.cos(ai)
+        si = math.sin(ai)
+        cj = math.cos(aj)
+        sj = math.sin(aj)
+        ck = math.cos(ak)
+        sk = math.sin(ak)
+        cc = ci*ck
+        cs = ci*sk
+        sc = si*ck
+        ss = si*sk
+
+        q = np.empty((4, ))
+        q[0] = cj*sc - sj*cs
+        q[1] = cj*ss + sj*cc
+        q[2] = cj*cs - sj*sc
+        q[3] = cj*cc + sj*ss
+
+        return q
 
 
     # Write commands to roboteq.
@@ -126,13 +191,13 @@ class Roboteq_Node(rclpy.node.Node):
         self.write_runtime_command('G',[1000,1000])
 
         self.left_port.write(motor_cmd_string1.encode())
-        left_mot_1 = self.left_port.read_until(b"\r")
+        left_mot_1 = self.left_port.read_until(b"\r").replace("+","0")
         self.left_port.write(motor_cmd_string2.encode())
-        left_mot_2 = self.left_port.read_until(b"\r")
+        left_mot_2 = self.left_port.read_until(b"\r").replace("+","0")
         self.right_port.write(motor_cmd_string1.encode())
-        right_mot_1 = self.left_port.read_until(b"\r")
+        right_mot_1 = self.left_port.read_until(b"\r").replace("+","0")
         self.right_port.write(motor_cmd_string2.encode())
-        right_mot_2 = self.left_port.read_until(b"\r")
+        right_mot_2 = self.left_port.read_until(b"\r").replace("+","0")
 
      
         #print(right_mot_2)
