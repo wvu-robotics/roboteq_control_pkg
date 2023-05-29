@@ -1,3 +1,25 @@
+# generate_roboteq_constants.py
+# By: Nathan Adkins 
+# WVU IRL 
+
+'''
+Roboteq User Manual: https://www.roboteq.com/docman-list/motor-controllers-documents-and-files/documentation/user-manual/272-roboteq-controllers-user-manual-v21/file
+
+Runtime Commands                              page 188  
+DS402 Runtime Commands                        page 209  
+Runtime Queries                               page 222  
+DS402 Runtime Queries                         page 268  
+Query History Commands                        page 286  
+Maintenance Commands                          page 289  
+General Configuration and Safety              page 296  
+Analog, Digital, Pulse IO Configurations      page 312  
+Motor Configurations                          page 330  
+Brushless Secific Commands                    page 364  
+AC Induction Specific Commands                page 385  
+CAN Communication Commands                    page 391  
+TCP Communication Commands                    page 397 
+'''
+
 import rclpy.node
 import serial 
 from geometry_msgs.msg import *

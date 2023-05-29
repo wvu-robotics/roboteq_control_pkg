@@ -17,114 +17,64 @@ Motor Configurations                          page 330
 Brushless Secific Commands                    page 364  
 AC Induction Specific Commands                page 385  
 CAN Communication Commands                    page 391  
-TCP Communication Commands                    page 397  
+TCP Communication Commands                    page 397 
 '''
 
-# Tables from the manual above were converted to CVS files for use in this script
+import csv, os
 
-# The CSV files follow the following format:
-# Command, Arguments, Description
-
-import csv
-
-def generate_dict_from_csv(header_string: str, header_body: str, new_file_name: str, csv_files: list[str], dict_names: list[str]):
-
-    # Input validation: Checking to see if the lengths of the lists are the same
-    if len(csv_files) != len(dict_names):
-        raise Exception("The number of files and dictionary names is not the same.")
-    
-    # Open the new constants file in write mode
-    # No need for FileNotFoundError, python will create file where you tell it, or overwrite existing contents
-    new_file = open(new_file_name, "w")
-
-    new_file.write(header_string)
-    new_file.write(header_body)
-    
-    # Iterating through the csv files 
-    for curr_dict_index in range(len(csv_files)):
-        curr_dict = {}
-
-        try:
-            # Opening current csv file
-            curr_file = open(csv_files[curr_dict_index])
-
-            # For each row in current csv file, assign "description" to "command" in the current dictionary
-            for row in csv.reader(curr_file, delimiter=','):
-                curr_dict.update({row[2] : row[0]})
-
-        except FileNotFoundError as file_error:
-            print("The file at " + csv_files[curr_dict_index] + " was not found.")
-            print(str(file_error))
-
-        except Exception as error:
-            print(str(error))
-
-        # Write the dictionary to the new constants file with the dictionary name and the current dictionary's value
-        dict_contents = dict_names[curr_dict_index] + " = " + str(curr_dict)
-
-        # Place newline characters after each dictionary key/value pair
-        dict_contents = dict_contents.replace(",",",\n")
-        # Make curly brakets have their own line (start of dictionary)
-        dict_contents = dict_contents.replace("{","{\n ")
-        # Make curly brakets have their own line (end of dictionary)
-        dict_contents = dict_contents.replace("}","\n   }\n")
-
-        # Write the dictionary to the new constants file
-        new_file.write(dict_contents + "\n")
-
-        # Clear the memory address to eliminate any weird python dictionary behaviors
-        del curr_dict 
+GENERATED_FILE_PATH = r'roboteq_control_pkg\roboteq_constants.py'
+CSV_DIRECTORY = 'roboteq_control_pkg\gen_roboteq_consts'
+REPLACED_CHARACTERS = [' ','&','-','/','(',')']
 
 
-generate_dict_from_csv(
+def generate_constants_from_csv():
+    csv_files: str = []
+    const_names: str = []
 
-    header_string= "# roboteq_constants.py \n# By: Nathan Adkins \n# WVU IRL\n\n",
-    header_body='''\'\'\'\nRoboteq User Manual: https://www.roboteq.com/docman-list/motor-controllers-documents-and-files/documentation/user-manual/272-roboteq-controllers-user-manual-v21/file
+    for curr_csv_file_name in os.listdir(CSV_DIRECTORY):
 
-Runtime Commands                              page 188  
-DS402 Runtime Commands                        page 209  
-Runtime Queries                               page 222  
-DS402 Runtime Queries                         page 268  
-Query History Commands                        page 286  
-Maintenance Commands                          page 289  
-General Configuration and Safety              page 296  
-Analog, Digital, Pulse IO Configurations      page 312  
-Motor Configurations                          page 330  
-Brushless Secific Commands                    page 364  
-AC Induction Specific Commands                page 385  
-CAN Communication Commands                    page 391  
-TCP Communication Commands                    page 397\n\'\'\'\n\n''',
+        curr_csv_file = os.path.join(CSV_DIRECTORY, curr_csv_file_name)
 
-    new_file_name= "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/roboteq_constants.py",
+        if os.path.isfile(curr_csv_file) and curr_csv_file.endswith('.csv'): 
+            
+            const_names.append(curr_csv_file_name.replace('.csv',''))
+            csv_files.append(curr_csv_file)
 
-    csv_files= 
-        [
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_ac_induction_specific_commands.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_analog_digital_pluse_io_configurations.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_brushless_specific_commands.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_can_communication_commands.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_ds402_runtime_commands.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_ds402_runtime_queries.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_general_configuration_and_safety.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_maintenance_commands.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_motor_configurations.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_runtime_commands.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_runtime_queries.csv",
-        "src/hardware_interfacing/roboteq_control_pkg/src/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/rt_tcp_communication_commands.csv",
-        ],
+            # Open the new constants file in write mode
+            new_file = open(GENERATED_FILE_PATH, "w")
+            new_file.write("# This file was autogenerated by:\n#     /roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts/generate_roboteq_constants.py\n\n")
+     
 
-    dict_names= 
-    ["AC_INDUCTION_SPECIFIC_COMMANDS",
-     "ANALOG_DIGITAL_PULSE_CONFIG",
-     "BRUSHLESS_SPECIFIC_COMMANDS",
-     "CAN_COMMANDS",
-     "DS402_RUNTIME_COMMANDS",
-     "DS402_RUNTIME_QUERIES",
-     "GENERAL_CONFIG_SAFETY",
-     "MAINTENANCE_COMMANDS",
-     "MOTOR_CONFIG",
-     "RUNTIME_COMMANDS",
-     "RUNTIME_QUERIES",
-     "TCP_COMMANDS",
-    ],
-)
+            # Iterating through the csv files 
+            for curr_const_index in range(len(csv_files)): 
+
+                # Defining class header and class instance names for the string being written to the new file
+                class_header = const_names[curr_const_index].lower()
+                class_instance_name = const_names[curr_const_index].upper()
+
+                # Opening current csv file
+                curr_file = open(csv_files[curr_const_index]) 
+
+                # Creating code for new class and new class constructor in the string being written to the new file
+                curr_class_str = 'class _' + class_header + "():\n" 
+                curr_class_str += '\n  def __init__(self): \n'
+
+
+                # Iterating through the contents of the current csv file 
+                for row in csv.reader(curr_file, delimiter=','):
+                    var_name = row[2]
+
+                    # Check for invalid characters before creating the class attributes in the string being written to the new file
+                    for curr_replaced_char in REPLACED_CHARACTERS:
+                        var_name = var_name.replace(curr_replaced_char, '_')
+
+                    # Create a class attribute with the description of the command, and assign command string to it in the string being written to the new file
+                    curr_class_str += '      self.' + var_name + ' = ' + '\"' + row[0] + '\"\n' 
+                
+
+                # Create an instance of the class in the string being written to the new file
+                curr_class_str += '\n' + class_instance_name + ' = _' + class_header + '()\n\n'
+                new_file.write(curr_class_str + "\n")
+
+
+generate_constants_from_csv()
