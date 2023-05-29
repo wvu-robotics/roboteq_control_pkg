@@ -4,5 +4,5 @@ ILLR,Inductance,Rotor Leakage Inductance
 IRR,Resistance,Rotor Resistance
 MPW,MotorPower,Minimum Power
 MXS,SlipFrequency,Optimal Slip Frequency
-RFC,Channel Amps,Rotor,Flux,Current
-VPH Channel Ratio,AC,Induction,Volts,per,Hertz
+RFC,Channel Amps,Rotor Flux Current
+VPH, Channel Ratio,AC Induction Volts per Hertz

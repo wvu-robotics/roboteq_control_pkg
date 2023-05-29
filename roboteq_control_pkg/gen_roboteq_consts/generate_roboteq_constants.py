@@ -64,6 +64,7 @@ def generate_constants_from_csv():
 
                 # Iterating through the contents of the current csv file 
                 for row in csv.reader(curr_file, delimiter=','):
+                    print(row)
                     var_name = row[2]
 
                     # Check for invalid characters before creating the class attributes in the string being written to the new file

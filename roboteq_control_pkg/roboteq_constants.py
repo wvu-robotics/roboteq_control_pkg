@@ -10,8 +10,8 @@ class _rt_ac_induction_specific_commands():
       self.Rotor_Resistance = "IRR"
       self.Minimum_Power = "MPW"
       self.Optimal_Slip_Frequency = "MXS"
-      self.Rotor = "RFC"
-      self.Induction = "VPH Channel Ratio"
+      self.Rotor_Flux_Current = "RFC"
+      self.AC_Induction_Volts_per_Hertz = "VPH"
 
 RT_AC_INDUCTION_SPECIFIC_COMMANDS = _rt_ac_induction_specific_commands()
 
