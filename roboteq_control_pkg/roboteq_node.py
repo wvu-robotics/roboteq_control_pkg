@@ -28,7 +28,7 @@ from tf2_ros import TransformBroadcaster
 import numpy as np
 
 import math
-from .roboteq_constants import *
+from roboteq_constants import *
 
 # For roboteq commands.
 MAX_RUNTIME_COMMANDS_LENGTH = 3
@@ -110,9 +110,8 @@ class Roboteq_Node(rclpy.node.Node):
 
         delta_time = 0.01 # Come back to this
 
-        motors_rpm_command = RUNTIME_QUERIES.get('Read Encoder Motor Speed in RPM') # This turns into the letter 'S'.
+        motors_rpm_command = RT_RUNTIME_QUERIES.Read_Encoder_Motor_Speed_in_RPM
         wheel_velocities = self.write_runtime_query(motors_rpm_command) # What side? What front back. Don't know. Come back.
-
 
 
         # Get the average of the RPM for each side.
@@ -292,7 +291,7 @@ class Roboteq_Node(rclpy.node.Node):
             self.get_logger().warn('serial.SerialException: %s' % str(serExcpt))
 
     def configure_motor(self):
-
+        
         self.get_logger().info('Configuring motor')
 
 

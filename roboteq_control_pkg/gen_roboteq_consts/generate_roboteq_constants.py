@@ -24,8 +24,8 @@ import csv, os
 
 
 # ***These need to change on ubuntu machine:***
-GENERATED_FILE_PATH = r'roboteq_control_pkg\roboteq_constants.py'
-CSV_DIRECTORY = 'roboteq_control_pkg\gen_roboteq_consts'
+GENERATED_FILE_PATH = 'src/hardware_interfacing/roboteq_control_pkg/roboteq_control_pkg/roboteq_constants.py'
+CSV_DIRECTORY = 'src/hardware_interfacing/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts'
 REPLACED_CHARACTERS = [' ','&','-','/','(',')']
 
 
