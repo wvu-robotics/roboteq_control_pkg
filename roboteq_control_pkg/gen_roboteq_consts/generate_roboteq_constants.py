@@ -64,7 +64,7 @@ def generate_constants_from_csv():
 
                 # Iterating through the contents of the current csv file 
                 for row in csv.reader(curr_file, delimiter=','):
-                    print(row)
+
                     var_name = row[2]
 
                     # Check for invalid characters before creating the class attributes in the string being written to the new file
@@ -78,6 +78,8 @@ def generate_constants_from_csv():
                 # Create an instance of the class in the string being written to the new file
                 curr_class_str += '\n' + class_instance_name + ' = _' + class_header + '()\n\n'
                 new_file.write(curr_class_str + "\n")
+
+    print("Created the constants file at the followinf file path:\n" + "     " + GENERATED_FILE_PATH)
 
 
 generate_constants_from_csv()
