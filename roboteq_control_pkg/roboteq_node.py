@@ -62,7 +62,7 @@ class Roboteq_Node(rclpy.node.Node):
         self.declare_parameter('baud', 115200)
 
         self.declare_parameter('wheel_circumference', 0.55)
-        self.declare_parameter('wheel_radius',0.0875)
+        self.declare_parameter('wheel_radius',0.125)
         self.declare_parameter('track_radius', 0.445)
         self.declare_parameter('track_width', 2*0.445)
 
@@ -93,8 +93,7 @@ class Roboteq_Node(rclpy.node.Node):
             qos_profile = 10
             )
     
-        #self.timer = self.create_timer(.01, self.generate_odom_and_tf)
-       # self.timer = self.create_timer(0.001, self.serial_send)
+        self.timer = self.create_timer(.01, self.generate_odom_and_tf)
         self.rel_time = self.get_clock().now().nanoseconds 
 
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -150,6 +149,7 @@ class Roboteq_Node(rclpy.node.Node):
         delta_theta = (V_r - V_l) / self.get_parameter('track_width').get_parameter_value().double_value * delta_time
 
         self.theta += delta_theta
+        self.get_logger().info("THETA IS " + str(self.theta))
 
         # Get the components of translational velocity using our current theta.
         V_x = V_avg * math.cos(self.theta)
@@ -163,7 +163,7 @@ class Roboteq_Node(rclpy.node.Node):
         self.x_pos += X_delta
         self.y_pos += Y_delta
         
-        quats = self.quaternion_from_euler(0,0, self.theta)
+        quats = self.quaternion_from_euler(0,0, math.radians(self.theta))
 
         # update the relative time and then publish odom message
         self.rel_time = int(self.get_clock().now().nanoseconds)
@@ -246,7 +246,7 @@ class Roboteq_Node(rclpy.node.Node):
             except Exception as serExcpt:
                 self.get_logger().warn(str(serExcpt))
         time.sleep(.005)
-        self.generate_odom_and_tf()
+        #self.generate_odom_and_tf()
 """
 
 
