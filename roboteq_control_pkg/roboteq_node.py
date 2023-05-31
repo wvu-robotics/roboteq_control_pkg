@@ -24,6 +24,7 @@ import math
 import serial 
 import numpy as np
 import rclpy.node
+import time
 
 from geometry_msgs.msg import *
 from nav_msgs.msg import Odometry
@@ -92,12 +93,9 @@ class Roboteq_Node(rclpy.node.Node):
             qos_profile = 10
             )
     
-        # self.cmd_vel_is_writing: bool = False 
-        # self.odom_tf_is_reading: bool = False
-
-        
-        self.timer = self.create_timer(.01, self.generate_odom_and_tf)
-        self.rel_time = self.get_clock().now().nanoseconds # use this to calculate delta_t for odom
+        #self.timer = self.create_timer(.01, self.generate_odom_and_tf)
+       # self.timer = self.create_timer(0.001, self.serial_send)
+        self.rel_time = self.get_clock().now().nanoseconds 
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
@@ -120,19 +118,21 @@ class Roboteq_Node(rclpy.node.Node):
         # Get the average of the RPM for each side.
         # read_runtime_query returns list of string, eval(rpm) converts list elements to int from str
         rpm_query_output = self.left_roboteq.read_runtime_query(rpm_cmd) + self.right_roboteq.read_runtime_query(rpm_cmd)
+
+        # Set the class-wide query string.
+
+        print("rpm_query_output" + str(rpm_query_output))
         # Want to place the delta time calculation close to the runtime query to ensue that the time and measurement are as close as possible
         delta_time = (self.get_clock().now().nanoseconds - self.rel_time)/ 1e9
-
-   
 
         try:
             rpm_values = list(map(int,rpm_query_output))
         except Exception as exception:
-            rpm_values = [0,0]
+            rpm_values = [0,0,0,0]
             print("Ignoring rpm output: \n" + str(rpm_query_output) + "\n" + str(exception))
 
         left_rpms = rpm_values[0:1]
-        right_rpms = rpm_values[0:1]
+        right_rpms = rpm_values[2:3]
 
         print("----------\nLeft RPMS: " + str(left_rpms) + "\nRight RPMS: " + str(right_rpms))
 
@@ -165,7 +165,7 @@ class Roboteq_Node(rclpy.node.Node):
         
         quats = self.quaternion_from_euler(0,0, self.theta)
 
-
+        # update the relative time and then publish odom message
         self.rel_time = int(self.get_clock().now().nanoseconds)
         self.publish_odom(self.x_pos, self.y_pos, 0.0, quats) 
     
@@ -217,6 +217,9 @@ class Roboteq_Node(rclpy.node.Node):
 
     def cmd_vel_callback(self, twist_msg: Twist):
 
+        # Try calling this inside here to see if it solves the simultaneous access issue with the serial port.
+        
+
         self.get_logger().info('Recieved twist message: \n' + str(twist_msg))
 
         track_width: float = self.get_parameter('track_width').get_parameter_value().double_value
@@ -242,7 +245,8 @@ class Roboteq_Node(rclpy.node.Node):
 
             except Exception as serExcpt:
                 self.get_logger().warn(str(serExcpt))
-
+        time.sleep(.005)
+        self.generate_odom_and_tf()
 """
 
 
@@ -355,6 +359,7 @@ class RoboteqSerialPort(serial.Serial):
             None
         '''
         if(self.is_open):
+            self.reset_output_buffer()
             runtime_char = '!'
             if len(cmd_str) > MAX_RUNTIME_COMMANDS_LENGTH:
                 Exception("Invalid command length for runtime commands.")
@@ -377,6 +382,7 @@ class RoboteqSerialPort(serial.Serial):
             str[]: A list of strings giving the value of the query in the order of the motor numbers 
         '''
         if(self.is_open):
+            self.reset_input_buffer()
             query_char = '?'
             if len(cmd_str) > MAX_RUNTIME_QUERIES_LENGTH:
                 Exception("Invalid command length for runtime queries.")
@@ -438,9 +444,14 @@ class RoboteqSerialPort(serial.Serial):
 
 def main(args=None):
 
+  
+
     rclpy.init(args=args)
 
     roboteq_node = Roboteq_Node()
+    # while True:
+        # time.sleep(0.5)
+    roboteq_node.generate_odom_and_tf()
     rclpy.spin(roboteq_node)
 
     roboteq_node.left_roboteq.disconnect_serial()
@@ -451,3 +462,13 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+
+
+'''
+Need:
+
+
+
+
+
+'''
