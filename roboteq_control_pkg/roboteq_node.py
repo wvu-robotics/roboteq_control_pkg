@@ -158,21 +158,20 @@ class Roboteq_Node(rclpy.node.Node):
         omega_r_avg = sum(right_rpms)/len(right_rpms)
 
         # Get the translational velocities for each side (m/s)
-        V_r = omega_r_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value / 60
-        V_l = omega_l_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value / 60 
-
+        V_r = omega_r_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value / 60 # m/s
+        V_l = omega_l_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value / 60 # m/s
+ 
         # Get the total linear velocity of the robot body using both sides.
-        V_avg = (V_r + V_l) / 2
+        V_avg = (V_r + V_l) / 2 # m / s 
 
-
-        delta_theta_rads = math.radians(((V_r - V_l) / self.get_parameter('track_width').get_parameter_value().double_value) * delta_time)
+        delta_theta_rads = (((V_r - V_l) / self.get_parameter('track_width').get_parameter_value().double_value) * delta_time)
 
         self.theta += delta_theta_rads
 
         if ( DEBUGGING ):
-            self.get_logger().info("V_r" + str(V_r))
-            self.get_logger().info("V_l" + str(V_l))
-            self.get_logger().info("THETA IS " + str(self.theta))
+            self.get_logger().info("V_r: " + str(V_r))
+            self.get_logger().info("V_l: " + str(V_l))
+            self.get_logger().info("THETA IS :" + str(math.degrees(self.theta)))
 
         # Get the components of translational velocity using our current theta.
         V_x = V_avg * math.cos(self.theta)
@@ -199,7 +198,7 @@ class Roboteq_Node(rclpy.node.Node):
         odom_message.pose.pose.position.y = self.y_pos
         odom_message.pose.pose.position.z = 0.0
 
-        quats = self.quaternion_from_euler(0,0, -1 * self.theta)
+        quats = self.quaternion_from_euler(0,0, self.theta)
         quat_message = Quaternion()
         quat_message.x = quats[0]
         quat_message.y = quats[1]
