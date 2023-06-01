@@ -47,6 +47,8 @@ MAX_RUNTIME_COMMANDS_LENGTH = 3
 MAX_RUNTIME_QUERIES_LENGTH = 3
 MAX_MAINTENANCE_COMMAND_LENGTH = 5
 
+DEBUGGING = True 
+
 
 class Roboteq_Node(rclpy.node.Node):
 
@@ -64,7 +66,7 @@ class Roboteq_Node(rclpy.node.Node):
         self.declare_parameter('wheel_circumference', 0.55)
         self.declare_parameter('wheel_radius',0.125)
         self.declare_parameter('track_radius', 0.445)
-        self.declare_parameter('track_width', 2*0.445)
+        self.declare_parameter('track_width', 0.89)
 
         self.left_roboteq = RoboteqSerialPort(
             port= self.get_parameter('left_roboteq_port').get_parameter_value().string_value,
@@ -119,37 +121,58 @@ class Roboteq_Node(rclpy.node.Node):
         rpm_query_output = self.left_roboteq.read_runtime_query(rpm_cmd) + self.right_roboteq.read_runtime_query(rpm_cmd)
 
         # Set the class-wide query string.
-
-        print("rpm_query_output" + str(rpm_query_output))
+        if ( DEBUGGING ):
+            print("rpm_query_output" + str(rpm_query_output))
         # Want to place the delta time calculation close to the runtime query to ensue that the time and measurement are as close as possible
-        delta_time = (self.get_clock().now().nanoseconds - self.rel_time)/ 1e9
+
+        curr_time = int(self.get_clock().now().nanoseconds)
+        delta_time = int(curr_time - self.rel_time)/ 1e9
 
         try:
             rpm_values = list(map(int,rpm_query_output))
         except Exception as exception:
             rpm_values = [0,0,0,0]
-            print("Ignoring rpm output: \n" + str(rpm_query_output) + "\n" + str(exception))
+            if ( DEBUGGING ):
+                print("Ignoring rpm output: \n" + str(rpm_query_output) + "\n" + str(exception))
 
-        left_rpms = rpm_values[0:1]
-        right_rpms = rpm_values[2:3]
 
-        print("----------\nLeft RPMS: " + str(left_rpms) + "\nRight RPMS: " + str(right_rpms))
+        print("--------------------------------\nrpm_query_output: " + str(rpm_query_output))
+
+        '''
+        0 - TL
+        1 - BL
+        2 - BR
+        3 - TR
+        '''
+
+        l_val = 1
+        r_val = 2
+
+        left_rpms = [ rpm_values[l_val], rpm_values[l_val] ]
+        right_rpms = [ rpm_values[r_val], rpm_values[r_val] ] 
+
+        if (DEBUGGING):
+            print("----------\nLeft RPMS: " + str(left_rpms) + "\nRight RPMS: " + str(right_rpms))
 
         omega_l_avg = sum(left_rpms)/len(left_rpms)
         omega_r_avg = sum(right_rpms)/len(right_rpms)
 
         # Get the translational velocities for each side (m/s)
-        V_r = omega_r_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value
-        V_l = omega_l_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value
+        V_r = omega_r_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value / 60
+        V_l = omega_l_avg * 2 * math.pi * self.get_parameter('wheel_radius').get_parameter_value().double_value / 60 
 
         # Get the total linear velocity of the robot body using both sides.
         V_avg = (V_r + V_l) / 2
 
 
-        delta_theta = (V_r - V_l) / self.get_parameter('track_width').get_parameter_value().double_value * delta_time
+        delta_theta_rads = math.radians(((V_r - V_l) / self.get_parameter('track_width').get_parameter_value().double_value) * delta_time)
 
-        self.theta += delta_theta
-        self.get_logger().info("THETA IS " + str(self.theta))
+        self.theta += delta_theta_rads
+
+        if ( DEBUGGING ):
+            self.get_logger().info("V_r" + str(V_r))
+            self.get_logger().info("V_l" + str(V_l))
+            self.get_logger().info("THETA IS " + str(self.theta))
 
         # Get the components of translational velocity using our current theta.
         V_x = V_avg * math.cos(self.theta)
@@ -163,25 +186,20 @@ class Roboteq_Node(rclpy.node.Node):
         self.x_pos += X_delta
         self.y_pos += Y_delta
         
-        quats = self.quaternion_from_euler(0,0, math.radians(self.theta))
-
+    
         # update the relative time and then publish odom message
         self.rel_time = int(self.get_clock().now().nanoseconds)
-        self.publish_odom(self.x_pos, self.y_pos, 0.0, quats) 
-    
-        # Publish the TF here.
-            
-            
 
-    def publish_odom(self, x, y, z, quats):
 
         odom_message = Odometry()
+        odom_message.header.frame_id = "odom"
         odom_message.header.stamp = self.get_clock().now().to_msg()
+        odom_message.child_frame_id = "base_link"
+        odom_message.pose.pose.position.x = self.x_pos
+        odom_message.pose.pose.position.y = self.y_pos
+        odom_message.pose.pose.position.z = 0.0
 
-        odom_message.pose.pose.position.x = x
-        odom_message.pose.pose.position.y = y
-        odom_message.pose.pose.position.z = z 
-
+        quats = self.quaternion_from_euler(0,0, -1 * self.theta)
         quat_message = Quaternion()
         quat_message.x = quats[0]
         quat_message.y = quats[1]
@@ -191,6 +209,18 @@ class Roboteq_Node(rclpy.node.Node):
         odom_message.pose.pose.orientation = quat_message
                 
         self.odom_pub.publish(odom_message)
+
+
+        transform_message = TransformStamped()
+        transform_message.header.frame_id = "odom"
+        transform_message.header.stamp = self.get_clock().now().to_msg()
+        transform_message.child_frame_id = "base_link"
+        transform_message.transform.translation.x = self.x_pos
+        transform_message.transform.translation.y = self.y_pos
+        transform_message.transform.translation.z = 0.0
+        transform_message.transform.rotation = quat_message
+
+        self.tf_broadcaster.sendTransform(transform_message)
 
 
     def quaternion_from_euler(self, ai, aj, ak):
@@ -225,15 +255,15 @@ class Roboteq_Node(rclpy.node.Node):
         track_width: float = self.get_parameter('track_width').get_parameter_value().double_value
         wheel_circumference: float= self.get_parameter('wheel_circumference').get_parameter_value().double_value
 
-        right_speed = twist_msg.linear.x + 2 * twist_msg.angular.z * (track_width/2) # meters / second
-        left_speed = twist_msg.linear.x - 2 * twist_msg.angular.z * (track_width/2) # meters / second
+        right_speed = twist_msg.linear.x + twist_msg.angular.z * (track_width/2) # meters / second
+        left_speed = twist_msg.linear.x - twist_msg.angular.z * (track_width/2) # meters / second
 
         right_rpm = (10 * right_speed / wheel_circumference) * 60 # m/s / rotations/m = rotations/sec * 60 = rotations/minute
         left_rpm = (10 * left_speed / wheel_circumference ) * 60 # m/s / rotations/m = rotations/sec * 60 = rotations/minute
 
-        self.get_logger().info('Writing to serial ports')
-        self.get_logger().info('left: ' + str(left_rpm))
-        self.get_logger().info('right: ' + str(right_rpm))
+        self.get_logger().warn('Writing to serial ports')
+        self.get_logger().warn('left: ' + str(left_rpm))
+        self.get_logger().warn('right: ' + str(right_rpm))
 
 
         if(self.left_roboteq.is_open and self.right_roboteq.is_open):
