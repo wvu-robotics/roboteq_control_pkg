@@ -81,5 +81,10 @@ def generate_constants_from_csv():
 
     print("Created the constants file at the followinf file path:\n" + "     " + GENERATED_FILE_PATH)
 
+def main():
+    generate_constants_from_csv()
 
-generate_constants_from_csv()
+if __name__ == '__main__':
+    main()
+
+
