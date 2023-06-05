@@ -32,13 +32,12 @@ from tf2_ros import TransformBroadcaster
 from .roboteq_serial_port import RoboteqSerialPort
 from .roboteq_constants import *
 
-
 # ROS CONSTANTS 
 # -------------
 DEFAULT_SUB_CMD_VEL_TOPIC = 'cmd_vel' # ROS topic this node subscribes to in the command velocity callback 
 DEFAULT_PUB_ODOM_TOPIC = 'odom' # ROS topic this node publishes the odometry message to (nav_msgs.msg Odometry)
 
-DEFAULT_ODOM_PUBLISH_RATE_HZ = 100 # Number of odom publishes per second
+DEFAULT_ODOM_PUBLISH_RATE_HZ = 100.0 # Number of odom publishes per second
 DEFAULT_COMMAND_VEL_CALLBACK_DELAY = .005 # Seconds forced between each call of the callback function 
 # -------------
 
@@ -51,17 +50,23 @@ DEFAULT_LEFT_PORT = '/dev/left_roboteq' # Device path to the left roboteq motor 
 DEFAULT_RIGHT_PORT = '/dev/right_roboteq' # Device path to the right roboteq motor controller
 
 WHEEL_RADIUS = 0.125 # Radius of the wheels (METERS)
-TRACK_WIDTH = 0.89 # Distance between wheels on either side of chassis (Bilaterally) (METERS)
+TRACK_WIDTH = 0.77 # Distance between wheels on either side of chassis (Bilaterally) (METERS)
+
+GEAR_REDUCTION_RATIO = (12.0/40.0) ** 3 # Found by looking at the output gears on the gearbox
 
 DEFAULT_BAUD = 115200 # Bits per second / pulses per second (Value acceptable by roboteqs)
 DEFAULT_TIMEOUT = 5
 # -------------------------------------- 
 
 
-# MISC CONSTANTS 
+# SAFETY & MISC CONSTANTS 
 # --------------
-DEFAULT_DEBUGGING = False 
+DEFAULT_MAX_METERS_PER_SECOND = 1 # Maximum RPM the motors can go 
+DEFAULT_MAX_RPMS = (DEFAULT_MAX_METERS_PER_SECOND) * (60/1) / (2 * math.pi * WHEEL_RADIUS) # (m/sec) * (sec/min) / (m/rot) = (rot/min)
+DEFAULT_DEBUGGING = True 
 # --------------
+
+
 
 
 class Roboteq_Node(rclpy.node.Node):
@@ -110,7 +115,7 @@ class Roboteq_Node(rclpy.node.Node):
             )
         
         # Creating the timer that will 
-        timer_period = (1/self.get_parameter('odom_pub_rate_hz').get_parameter_value().string_value)
+        timer_period = (1.0 / self.get_parameter('odom_pub_rate_hz').get_parameter_value().double_value)
         self.timer = self.create_timer(timer_period , self.generate_odom_and_tf)
         self.rel_time = self.get_clock().now().nanoseconds 
 
@@ -124,7 +129,7 @@ class Roboteq_Node(rclpy.node.Node):
         # Initial Position
         self.x_pos = 0
         self.y_pos = 0
-        self.theta = 0
+        self.theta_rads = 0
 
 
     def generate_odom_and_tf(self):
@@ -139,27 +144,29 @@ class Roboteq_Node(rclpy.node.Node):
         # Get the average of the RPM for each side.
         # read_runtime_query returns list of string, eval(rpm) converts list elements to int from str
         rpm_query_output = self.left_roboteq.read_runtime_query(rpm_cmd) + self.right_roboteq.read_runtime_query(rpm_cmd)
-
         # Set the class-wide query string.
-        if ( debugging ):
-            print("rpm_query_output: " + str(rpm_query_output))
+        # if ( debugging ):
+        self.get_logger().info("rpm_query_output: " + str(rpm_query_output))
         # Want to place the delta time calculation close to the runtime query to ensue that the time and measurement are as close as possible
-
+ 
         curr_time = int(self.get_clock().now().nanoseconds)
         delta_time = int(curr_time - self.rel_time)/ 1e9
 
         try:
             rpm_values = list(map(int,rpm_query_output))
+            rpm_values = [ (rpm_value * GEAR_REDUCTION_RATIO )for rpm_value in rpm_values ]
+            self.get_logger().info(str(rpm_values))
+
         except Exception as exception:
             rpm_values = [0,0,0,0]
             if ( debugging ):
-                print("Ignoring rpm output: \n" + str(rpm_query_output) + "\n" + str(exception))
+                self.get_logger().info("Ignoring rpm output: \n" + str(rpm_query_output) + "\n" + str(exception))
 
         left_rpms = rpm_values[0:1]
         right_rpms = rpm_values[2:3]
 
         if (debugging):
-            print("----------\nLeft RPMS: " + str(left_rpms) + "\nRight RPMS: " + str(right_rpms))
+            self.get_logger().info("----------\nLeft RPMS: " + str(left_rpms) + "\nRight RPMS: " + str(right_rpms))
 
         omega_l_avg = sum(left_rpms)/len(left_rpms)
         omega_r_avg = sum(right_rpms)/len(right_rpms)
@@ -173,16 +180,16 @@ class Roboteq_Node(rclpy.node.Node):
 
         delta_theta_rads = (((V_r - V_l) / self.get_parameter('track_width').get_parameter_value().double_value) * delta_time)
 
-        self.theta += delta_theta_rads
+        self.theta_rads += delta_theta_rads
 
         if ( debugging ):
             self.get_logger().info("V_r: " + str(V_r))
             self.get_logger().info("V_l: " + str(V_l))
-            self.get_logger().info("THETA IS :" + str(math.degrees(self.theta)))
-
+            self.get_logger().info("THETA IS: " + str(math.degrees(self.theta_rads)))
+            
         # Get the components of translational velocity using our current theta.
-        V_x = V_avg * math.cos(self.theta)
-        V_y = V_avg * math.sin(self.theta)
+        V_x = V_avg * math.cos(self.theta_rads)
+        V_y = V_avg * math.sin(self.theta_rads)
 
         # Now find our pose change using the velocities
         X_delta = V_x * delta_time
@@ -203,7 +210,7 @@ class Roboteq_Node(rclpy.node.Node):
         odom_message.pose.pose.position.y = self.y_pos
         odom_message.pose.pose.position.z = 0.0
 
-        quats = self.quaternion_from_euler(0,0, self.theta)
+        quats = self.quaternion_from_euler(0,0, self.theta_rads)
         quat_message = Quaternion()
         quat_message.x = quats[0]
         quat_message.y = quats[1]
@@ -249,21 +256,31 @@ class Roboteq_Node(rclpy.node.Node):
 
 
     def cmd_vel_callback(self, twist_msg: Twist):
-        
-        self.get_logger().info('Recieved twist message: \n' + str(twist_msg))
+
+        def clamp(value, minimum, maximum):
+            return max(minimum, min(value,maximum))
+    
+        debugging = self.get_parameter('debugging_state').get_parameter_value().bool_value
+
+        if ( debugging ):
+            self.get_logger().info('Recieved twist message: \n' + str(twist_msg))
 
         track_width: float = self.get_parameter('track_width').get_parameter_value().double_value
-        wheel_radius: float= self.get_parameter('wheel_radius').get_parameter_value().double_value
+        wheel_radius: float = self.get_parameter('wheel_radius').get_parameter_value().double_value
 
-        right_speed = twist_msg.linear.x + twist_msg.angular.z * (track_width/2) # meters / second
-        left_speed = twist_msg.linear.x - twist_msg.angular.z * (track_width/2) # meters / second
+        x_linear_component = clamp(twist_msg.linear.x, -1.0, 1.0)
+        z_angular_component = clamp(twist_msg.angular.z, -1.0, 1.0)
 
-        right_rpm = ( right_speed / (wheel_radius * 2 * math.pi)) * 60 # m/s / rotations/m = rotations/sec * 60 = rotations/minute
-        left_rpm = ( left_speed / (wheel_radius * 2 * math.pi) ) * 60 # m/s / rotations/m = rotations/sec * 60 = rotations/minute
+        right_speed = DEFAULT_MAX_RPMS * ( x_linear_component + z_angular_component * (track_width/2) ) # meters / second
+        left_speed = DEFAULT_MAX_RPMS * ( x_linear_component - z_angular_component * (track_width/2) )  # meters / second
 
-        self.get_logger().info('Writing to serial ports')
-        self.get_logger().info('left: ' + str(left_rpm))
-        self.get_logger().info('right: ' + str(right_rpm))
+        right_rpm = GEAR_REDUCTION_RATIO * ( right_speed / (wheel_radius * 2 * math.pi)) * 60 # m/s / rotations/m = rotations/sec * 60 = rotations/minute
+        left_rpm = GEAR_REDUCTION_RATIO * ( left_speed / (wheel_radius * 2 * math.pi) ) * 60 # m/s / rotations/m = rotations/sec * 60 = rotations/minute
+
+        if ( debugging ):
+            self.get_logger().info('Writing to serial ports')
+            self.get_logger().info('left: ' + str(left_rpm))
+            self.get_logger().info('right: ' + str(right_rpm))
 
         if(self.left_roboteq.is_open and self.right_roboteq.is_open):
             try:

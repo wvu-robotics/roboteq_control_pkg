@@ -100,20 +100,24 @@ class RoboteqSerialPort(serial.Serial):
             -------
             str[]: A list of strings giving the value of the query in the order of the motor numbers 
         '''
-        query_char = '?'
-        if len(cmd_str) > MAX_RUNTIME_QUERIES_LENGTH:
-            Exception("Invalid command length for runtime queries.")
-        query_returns = [] 
-        # removing unvalid characters from the read byte string
-        for motor_num in range(self.motor_count):
-            # Creating the serial command in the correct format and writing to the port
-            motor_query_string = f'{query_char}{cmd_str} {motor_num+1}\r'
-            self.write(motor_query_string.encode())
-            # Reading the serial port, replacing invalid characters 
-            read_string = self.read_until(b'\r')
-            # Placing edited string in list in the order of the motors 
-            query_returns.append(read_string.decode())
-        return query_returns
+        if(self.is_open):
+            self.reset_input_buffer()
+            query_char = '?'
+            if len(cmd_str) > MAX_RUNTIME_QUERIES_LENGTH:
+                Exception("Invalid command length for runtime queries.")
+            query_returns: list[str]= [] 
+            # removing unvalid characters from the read byte string
+            for motor_num in range(self.motor_count):
+                # Creating the serial command in the correct format and writing to the port
+                motor_query_string = f'{query_char}{cmd_str} {motor_num+1}\r'
+                self.write(motor_query_string.encode())
+                # Reading the serial port, replacing invalid characters 
+                read_string = self.read_until(b'\r').decode()
+                read_string = read_string.replace(f'{cmd_str}=','')
+                read_string = read_string.replace('\r','')
+                # Placing edited string in list in the order of the motors 
+                query_returns.append(read_string)
+            return query_returns
     
 
     def write_maintenance_command(self, cmd_str: str):
