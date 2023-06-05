@@ -20,26 +20,17 @@ CAN Communication Commands                    page 391
 TCP Communication Commands                    page 397 
 '''
 
-import serial, time
-from roboteq_constants import *
+import serial
 
 LEFT_PORT = '/dev/left_roboteq'
 RIGHT_PORT = '/dev/right_roboteq'
-
-
 BAUD = 115200 
 TIMEOUT = 5
-
 
 MAX_MOTOR_COUNT = 3 
 MAX_RUNTIME_COMMANDS_LENGTH = 3 
 MAX_RUNTIME_QUERIES_LENGTH = 3
 MAX_MAINTENANCE_COMMAND_LENGTH = 5
-
-speed_cmd = RT_RUNTIME_COMMANDS.Go_to_Speed_or_to_Relative_Position
-set_acc = RT_RUNTIME_COMMANDS.Set_Acceleration
-motor_speed = RT_RUNTIME_QUERIES.Read_Encoder_Motor_Speed_in_RPM
-
 
 class RoboteqSerialPort(serial.Serial):
     '''This class is used to abstract a serial port to a roboteq controller serial port 
@@ -162,15 +153,3 @@ class RoboteqSerialPort(serial.Serial):
                 return True
         except serial.SerialException as serExcpt:
             print(str(serExcpt))
-
-
-left = RoboteqSerialPort(LEFT_PORT,BAUD,TIMEOUT,2)
-right = RoboteqSerialPort(RIGHT_PORT,BAUD,TIMEOUT,2)
-
-while True:
-    time.sleep(0.01)
-    print("----------\nLeft" + str(left.read_runtime_query(motor_speed)))
-    print("Right" + str(right.read_runtime_query(motor_speed)))
-  
-
-

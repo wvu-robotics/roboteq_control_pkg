@@ -21,7 +21,6 @@ TCP Communication Commands                    page 397
 '''
 
 import math
-import serial 
 import numpy as np
 import rclpy.node
 import time
@@ -30,7 +29,7 @@ from geometry_msgs.msg import *
 from nav_msgs.msg import Odometry
 from tf2_ros import TransformBroadcaster
 
-# from .roboteq_serial_port import RoboteqSerialPort
+from .roboteq_serial_port import RoboteqSerialPort
 from .roboteq_constants import *
 
 # For roboteq commands.
@@ -47,7 +46,7 @@ MAX_RUNTIME_COMMANDS_LENGTH = 3
 MAX_RUNTIME_QUERIES_LENGTH = 3
 MAX_MAINTENANCE_COMMAND_LENGTH = 5
 
-DEBUGGING = True 
+DEBUGGING = False 
 
 
 class Roboteq_Node(rclpy.node.Node):
@@ -122,7 +121,7 @@ class Roboteq_Node(rclpy.node.Node):
 
         # Set the class-wide query string.
         if ( DEBUGGING ):
-            print("rpm_query_output" + str(rpm_query_output))
+            print("rpm_query_output: " + str(rpm_query_output))
         # Want to place the delta time calculation close to the runtime query to ensue that the time and measurement are as close as possible
 
         curr_time = int(self.get_clock().now().nanoseconds)
@@ -135,21 +134,8 @@ class Roboteq_Node(rclpy.node.Node):
             if ( DEBUGGING ):
                 print("Ignoring rpm output: \n" + str(rpm_query_output) + "\n" + str(exception))
 
-
-        print("--------------------------------\nrpm_query_output: " + str(rpm_query_output))
-
-        '''
-        0 - TL
-        1 - BL
-        2 - BR
-        3 - TR
-        '''
-
-        l_val = 1
-        r_val = 2
-
-        left_rpms = [ rpm_values[l_val], rpm_values[l_val] ]
-        right_rpms = [ rpm_values[r_val], rpm_values[r_val] ] 
+        left_rpms = rpm_values[0:1]
+        right_rpms = rpm_values[2:3]
 
         if (DEBUGGING):
             print("----------\nLeft RPMS: " + str(left_rpms) + "\nRight RPMS: " + str(right_rpms))
@@ -209,7 +195,6 @@ class Roboteq_Node(rclpy.node.Node):
                 
         self.odom_pub.publish(odom_message)
 
-
         transform_message = TransformStamped()
         transform_message.header.frame_id = "odom"
         transform_message.header.stamp = self.get_clock().now().to_msg()
@@ -220,7 +205,6 @@ class Roboteq_Node(rclpy.node.Node):
         transform_message.transform.rotation = quat_message
 
         self.tf_broadcaster.sendTransform(transform_message)
-
 
     def quaternion_from_euler(self, ai, aj, ak):
         ai /= 2.0
@@ -260,9 +244,10 @@ class Roboteq_Node(rclpy.node.Node):
         right_rpm = (10 * right_speed / wheel_circumference) * 60 # m/s / rotations/m = rotations/sec * 60 = rotations/minute
         left_rpm = (10 * left_speed / wheel_circumference ) * 60 # m/s / rotations/m = rotations/sec * 60 = rotations/minute
 
-        self.get_logger().warn('Writing to serial ports')
-        self.get_logger().warn('left: ' + str(left_rpm))
-        self.get_logger().warn('right: ' + str(right_rpm))
+
+        self.get_logger().info('Writing to serial ports')
+        self.get_logger().info('left: ' + str(left_rpm))
+        self.get_logger().info('right: ' + str(right_rpm))
 
 
         if(self.left_roboteq.is_open and self.right_roboteq.is_open):
@@ -283,197 +268,139 @@ class Roboteq_Node(rclpy.node.Node):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-"""
-class RoboteqSerialPort(serial.Serial):
-    '''This class is used to abstract a serial port to a roboteq controller serial port 
-
-        class is a super class of serial
-
-        Attributes
-        ----------
-        motor_count : int
-            The number of motors connected to the downstream roboteq controller
-        self: serial
-            The serial port that corresponds to the roboteq controller's serial port 
-
-        Methods
-        -------
-        write_runtime_command(self, cmd_str: str, cmd_vals: list[str])
-
-        read_runtime_query(self, cmd_str: str)
-
-        write_maintenance_command(self, cmd_str: str)
-    '''
-
-    def __init__(self, port, baudrate, timeout, motor_count):
-        super(RoboteqSerialPort,self).__init__(
-            port= port,
-            baudrate= baudrate,
-            timeout= timeout,
-        )
-        if motor_count > MAX_MOTOR_COUNT:
-            Exception("Invalid number of motors for Roboteq")
-        self.motor_count = motor_count
-
-
-    def write_runtime_command(self, cmd_str: str, cmd_vals: list[str]):
-        '''This function writes runtime commands to each of the motors that correspond to a serial port/roboteq controller
+# """
+# class RoboteqSerialPort(serial.Serial):
+#     '''This class is used to abstract a serial port to a roboteq controller serial port 
+
+#         class is a super class of serial
+
+#         Attributes
+#         ----------
+#         motor_count : int
+#             The number of motors connected to the downstream roboteq controller
+#         self: serial
+#             The serial port that corresponds to the roboteq controller's serial port 
+
+#         Methods
+#         -------
+#         write_runtime_command(self, cmd_str: str, cmd_vals: list[str])
+
+#         read_runtime_query(self, cmd_str: str)
+
+#         write_maintenance_command(self, cmd_str: str)
+#     '''
+
+#     def __init__(self, port, baudrate, timeout, motor_count):
+#         super(RoboteqSerialPort,self).__init__(
+#             port= port,
+#             baudrate= baudrate,
+#             timeout= timeout,
+#         )
+#         if motor_count > MAX_MOTOR_COUNT:
+#             Exception("Invalid number of motors for Roboteq")
+#         self.motor_count = motor_count
+
+
+#     def write_runtime_command(self, cmd_str: str, cmd_vals: list[str]):
+#         '''This function writes runtime commands to each of the motors that correspond to a serial port/roboteq controller
     
-            Parameters
-            ----------
-            cmd_str : str
-                String of the serial command to be ran that corresponds to a roboteq runtime command
+#             Parameters
+#             ----------
+#             cmd_str : str
+#                 String of the serial command to be ran that corresponds to a roboteq runtime command
                 
-            cmd_vals : list[str]
-                The values to be used in the serial command in the order of the motor numbers
+#             cmd_vals : list[str]
+#                 The values to be used in the serial command in the order of the motor numbers
 
-            Returns
-            -------
-            None
-        '''
-        if(self.is_open):
-            self.reset_output_buffer()
-            runtime_char = '!'
-            if len(cmd_str) > MAX_RUNTIME_COMMANDS_LENGTH:
-                Exception("Invalid command length for runtime commands.")
-            motor_cmd_string = ''
-            for motor_num in range(self.motor_count):
-                motor_cmd_string += f'{runtime_char}{cmd_str} {motor_num+1} {cmd_vals[motor_num]}\r'
-            self.write(motor_cmd_string.encode())
+#             Returns
+#             -------
+#             None
+#         '''
+#         if(self.is_open):
+#             self.reset_output_buffer()
+#             runtime_char = '!'
+#             if len(cmd_str) > MAX_RUNTIME_COMMANDS_LENGTH:
+#                 Exception("Invalid command length for runtime commands.")
+#             motor_cmd_string = ''
+#             for motor_num in range(self.motor_count):
+#                 motor_cmd_string += f'{runtime_char}{cmd_str} {motor_num+1} {cmd_vals[motor_num]}\r'
+#             self.write(motor_cmd_string.encode())
 
 
-    def read_runtime_query(self, cmd_str: str):
-        '''This function reads the result of runtime queries and returns them in an list in order of motor number
+#     def read_runtime_query(self, cmd_str: str):
+#         '''This function reads the result of runtime queries and returns them in an list in order of motor number
         
-            Parameters
-            ----------
-            cmd_str : str
-                String of the serial command to be ran that corresponds to a roboteq runtime query
+#             Parameters
+#             ----------
+#             cmd_str : str
+#                 String of the serial command to be ran that corresponds to a roboteq runtime query
 
-            Returns
-            -------
-            str[]: A list of strings giving the value of the query in the order of the motor numbers 
-        '''
-        if(self.is_open):
-            self.reset_input_buffer()
-            query_char = '?'
-            if len(cmd_str) > MAX_RUNTIME_QUERIES_LENGTH:
-                Exception("Invalid command length for runtime queries.")
-            query_returns: list[str]= [] 
-            # removing unvalid characters from the read byte string
-            for motor_num in range(self.motor_count):
-                # Creating the serial command in the correct format and writing to the port
-                motor_query_string = f'{query_char}{cmd_str} {motor_num+1}\r'
-                self.write(motor_query_string.encode())
-                # Reading the serial port, replacing invalid characters 
-                read_string = self.read_until(b'\r').decode()
-                read_string = read_string.replace(f'{cmd_str}=','')
-                read_string = read_string.replace('\r','')
-                # Placing edited string in list in the order of the motors 
-                query_returns.append(read_string)
-            return query_returns
+#             Returns
+#             -------
+#             str[]: A list of strings giving the value of the query in the order of the motor numbers 
+#         '''
+#         if(self.is_open):
+#             self.reset_input_buffer()
+#             query_char = '?'
+#             if len(cmd_str) > MAX_RUNTIME_QUERIES_LENGTH:
+#                 Exception("Invalid command length for runtime queries.")
+#             query_returns: list[str]= [] 
+#             # removing unvalid characters from the read byte string
+#             for motor_num in range(self.motor_count):
+#                 # Creating the serial command in the correct format and writing to the port
+#                 motor_query_string = f'{query_char}{cmd_str} {motor_num+1}\r'
+#                 self.write(motor_query_string.encode())
+#                 # Reading the serial port, replacing invalid characters 
+#                 read_string = self.read_until(b'\r').decode()
+#                 read_string = read_string.replace(f'{cmd_str}=','')
+#                 read_string = read_string.replace('\r','')
+#                 # Placing edited string in list in the order of the motors 
+#                 query_returns.append(read_string)
+#             return query_returns
     
 
-    def write_maintenance_command(self, cmd_str: str):
-        '''This function writes maintenance commands to each of the motors that correspond to a serial port/roboteq controller
+#     def write_maintenance_command(self, cmd_str: str):
+#         '''This function writes maintenance commands to each of the motors that correspond to a serial port/roboteq controller
             
-            Parameters
-            ----------
-            cmd_str : str
-                String of the serial command to be ran that corresponds to a roboteq maintenance command
+#             Parameters
+#             ----------
+#             cmd_str : str
+#                 String of the serial command to be ran that corresponds to a roboteq maintenance command
 
-            Returns
-            -------
-            str[]: A list of strings giving the value of the query in the order of the motor numbers 
-        '''
-        if(self.is_open):
+#             Returns
+#             -------
+#             str[]: A list of strings giving the value of the query in the order of the motor numbers 
+#         '''
+#         if(self.is_open):
 
-            maint_char = '%'
-            safety_key = 321654987
-            if len(cmd_str) > MAX_MAINTENANCE_COMMAND_LENGTH:
-                Exception("Invalid command length for maintenance commands.")
+#             maint_char = '%'
+#             safety_key = 321654987
+#             if len(cmd_str) > MAX_MAINTENANCE_COMMAND_LENGTH:
+#                 Exception("Invalid command length for maintenance commands.")
     
-            motor_maint_cmd_string = f'{maint_char}{cmd_str} {safety_key} \r'
-            self.write(motor_maint_cmd_string.encode())
+#             motor_maint_cmd_string = f'{maint_char}{cmd_str} {safety_key} \r'
+#             self.write(motor_maint_cmd_string.encode())
 
 
-    def connect_serial(self):
-        try:
-            self.open()
-            if (self.is_open):
-                return True
-        except serial.SerialException as serExcpt:
-            print(str(serExcpt))
+#     def connect_serial(self):
+#         try:
+#             self.open()
+#             if (self.is_open):
+#                 return True
+#         except serial.SerialException as serExcpt:
+#             print(str(serExcpt))
 
 
-    def disconnect_serial(self):
-        try:
-            self.close()
-            if (not self.is_open):
-                return True
-        except serial.SerialException as serExcpt:
-            print(str(serExcpt))
+#     def disconnect_serial(self):
+#         try:
+#             self.close()
+#             if (not self.is_open):
+#                 return True
+#         except serial.SerialException as serExcpt:
+#             print(str(serExcpt))
 
 
 def main(args=None):
-
-  
 
     rclpy.init(args=args)
 
@@ -491,13 +418,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
-
-'''
-Need:
-
-
-
-
-
-'''
