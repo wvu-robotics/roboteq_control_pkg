@@ -98,7 +98,7 @@ class Roboteq_Node(rclpy.node.Node):
         
         self.cmd_vel_sub = self.create_subscription(
             msg_type= Twist,
-            topic= self.get_parameter('cmdvel_topic').get_parameter_value().string_value,
+            topic= self.get_parameter('cmd_vel_topic').get_parameter_value().string_value,
             callback= self.cmd_vel_callback,
             qos_profile= 1
             )
