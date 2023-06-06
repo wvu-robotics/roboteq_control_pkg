@@ -79,7 +79,7 @@ def generate_constants_from_csv():
                 curr_class_str += '\n' + class_instance_name + ' = _' + class_header + '()\n\n'
                 new_file.write(curr_class_str + "\n")
 
-    print("Created the constants file at the followinf file path:\n" + "     " + GENERATED_FILE_PATH)
+    print("Created the constants file at the following file path:\n" + "     " + GENERATED_FILE_PATH)
 
 def main():
     generate_constants_from_csv()
