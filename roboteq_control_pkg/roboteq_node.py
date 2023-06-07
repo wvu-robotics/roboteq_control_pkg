@@ -1,7 +1,6 @@
-# generate_roboteq_constants.py
+# roboteq_node.py
 # By: Nathan Adkins 
 # WVU IRL 
-
 '''
 Roboteq User Manual: https://www.roboteq.com/docman-list/motor-controllers-documents-and-files/documentation/user-manual/272-roboteq-controllers-user-manual-v21/file
 
