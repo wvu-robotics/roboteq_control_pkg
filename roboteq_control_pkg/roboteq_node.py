@@ -145,6 +145,10 @@ class Roboteq_Node(rclpy.node.Node):
         self.y_pos = 0.0
         self.theta_rads = 0.0
 
+        self.get_logger().info(f'roboteq_node.py:\n' + \
+                               f'Odometry Outputs\nTopic: {self.odom_pub.topic}\nMessage Type: {self.odom_pub.msg_type}\n' + \
+                               f'Control Inputs\nTopic: {self.cmd_vel_sub.topic}\nMessage Type: {self.cmd_vel_sub.msg_type}\n')
+
 
     def generate_odom_and_tf(self):
         """
@@ -240,8 +244,9 @@ class Roboteq_Node(rclpy.node.Node):
         if ( self.get_parameter('debugging_state').get_parameter_value().bool_value ):
             self.get_logger().info('generate_odom_and_tf:\n' + \
                                    '    RPM Query Values: ' + str(rpm_query_output) + '\n' + \
-                                   '    Adjusted RPM Values: ' + str(rpm_values) + '\n' + \
-                                   '    Current Theta Value: ' + str(math.degrees(self.theta_rads)) + '\n'
+                                   '    Adjusted RPM Values (Rounded): ' + str([int(rpm_value) for rpm_value in rpm_values]) + '\n' + \
+                                   '    Current Theta Value (Rounded): ' + str(int(math.degrees(self.theta_rads))) + '\n' + \
+                                   '    Current Position: ' + str([self.x_pos,self.y_pos]) + '\n'
                                    )
                             
     def quaternion_from_euler(self, ai, aj, ak):
