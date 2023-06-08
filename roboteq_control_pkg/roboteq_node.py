@@ -34,7 +34,7 @@ from .roboteq_constants import *
 # ROS CONSTANTS 
 # -------------
 DEFAULT_SUB_CMD_VEL_TOPIC = 'cmd_vel' # ROS topic this node subscribes to in the command velocity callback 
-DEFAULT_PUB_ODOM_TOPIC = 'odom' # ROS topic this node publishes the odometry message to (nav_msgs.msg Odometry)
+DEFAULT_PUB_ODOM_TOPIC = 'roboteq_odom' # ROS topic this node publishes the odometry message to (nav_msgs.msg Odometry)
 
 DEFAULT_ODOM_PUBLISH_RATE_HZ = 100.0 # Number of odom publishes per second
 DEFAULT_COMMAND_VEL_CALLBACK_DELAY = 0.005 # Seconds forced between each call of the callback function 
