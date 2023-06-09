@@ -66,8 +66,6 @@ DEFAULT_DEBUGGING = True
 # ----------------------
 
 
-
-
 class Roboteq_Node(rclpy.node.Node):
 
 
@@ -151,39 +149,33 @@ class Roboteq_Node(rclpy.node.Node):
 
 
     def generate_odom_and_tf(self):
-        """
-        Get the velocity info from roboteqs. Then calculate pose change. Add to pose and publish.
-        Then broadcast the TF.
-        """
 
         wheel_radius = self.get_parameter('wheel_radius').get_parameter_value().double_value
         track_width = self.get_parameter('track_width').get_parameter_value().double_value
 
-        # Get all four wheel RPMS
         rpm_cmd = RT_RUNTIME_QUERIES.Read_Encoder_Motor_Speed_in_RPM
-                
-        # Get the average of the RPM for each side.
-        # read_runtime_query returns list of string, eval(rpm) converts list elements to int from str
+
+        # Get all four wheel RPMS
         rpm_query_output = self.left_roboteq.read_runtime_query(rpm_cmd) + self.right_roboteq.read_runtime_query(rpm_cmd)
-        # Set the class-wide query string.
 
         # Want to place the delta time calculation close to the runtime query to ensue that the time and measurement are as close as possible
- 
         curr_time = int(self.get_clock().now().nanoseconds)
         delta_time = int(curr_time - self.rel_time)/ 1e9
 
         try:
-            rpm_values = list(map(int,rpm_query_output))
-            rpm_values = [ (rpm_value / DEFAULT_GEAR_REDUCTION_RATIO )for rpm_value in rpm_values ]
+            valid_rpm_values: list[int] = list(map(int,rpm_query_output))
+            gear_reduced_valid_rpm_values = [ (valid_rpm_value / DEFAULT_GEAR_REDUCTION_RATIO ) for valid_rpm_value in valid_rpm_values ]
 
         except Exception as exception:
-            rpm_values = [0,0,0,0]
+            self.get_logger().warn(str(exception))
+            self.get_logger().warn("generate_odom_and_tf:\n     rpm_query_output: " + str(rpm_query_output) + "\n     could not be mapped to integer values, making them zeros")
+            gear_reduced_valid_rpm_values = [0,0,0,0]
 
-        left_rpms = rpm_values[0:1]
-        right_rpms = rpm_values[2:3]
+        clean_left_rpms = gear_reduced_valid_rpm_values[0:1]
+        clean_right_rpms = gear_reduced_valid_rpm_values[2:3]
 
-        omega_l_avg = sum(left_rpms)/len(left_rpms)
-        omega_r_avg = sum(right_rpms)/len(right_rpms)
+        omega_l_avg = sum(clean_left_rpms)/len(clean_left_rpms)
+        omega_r_avg = sum(clean_right_rpms)/len(clean_right_rpms)
 
         # Get the translational velocities for each side (m/s)
         V_r = omega_r_avg * 2 * math.pi * wheel_radius / 60 # m/s
@@ -192,8 +184,8 @@ class Roboteq_Node(rclpy.node.Node):
         # Get the total linear velocity of the robot body using both sides.
         V_avg = (V_r + V_l) / 2 # m / s 
 
+        # Calculate the delta theta value in radians, update the theta value in radians
         delta_theta_rads = (((V_r - V_l) / track_width) * delta_time)
-
         self.theta_rads += delta_theta_rads
 
         # Get the components of translational velocity using our current theta.
@@ -211,25 +203,46 @@ class Roboteq_Node(rclpy.node.Node):
         # update the relative time and then publish odom message
         self.rel_time = int(self.get_clock().now().nanoseconds)
 
+        # Making the Odometry Message 
         odom_message = Odometry()
-        odom_message.header.frame_id = "odom"
+
+        # Header, Child Frame ID
         odom_message.header.stamp = self.get_clock().now().to_msg()
+        odom_message.header.frame_id = "odom"
         odom_message.child_frame_id = "base_link"
+
+        # Pose with Covariance 
+        # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/PoseWithCovariance.html
         odom_message.pose.pose.position.x = self.x_pos
         odom_message.pose.pose.position.y = self.y_pos
         odom_message.pose.pose.position.z = 0.0
 
-        quats = self.quaternion_from_euler(0,0, self.theta_rads)
-        quat_message = Quaternion()
-        quat_message.x = quats[0]
-        quat_message.y = quats[1]
-        quat_message.z = quats[2]
-        quat_message.w = quats[3]
+        quaternion_message = self.quaternion_from_euler(0,0, self.theta_rads)
+        odom_message.pose.pose.orientation = quaternion_message
 
-        odom_message.pose.pose.orientation = quat_message
-                
+        # Twist with Covariance
+        # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/TwistWithCovariance.html
+        odom_message.twist.twist.linear.x = V_x
+        odom_message.twist.twist.linear.y = V_y
+        odom_message.twist.twist.linear.z = 0.0
+
+        odom_message.twist.twist.angular.x = 0.0
+        odom_message.twist.twist.angular.x = 0.0
+        odom_message.twist.twist.angular.x = 0.0
+
+
+
+
+
+
+
+        # Publishing the Odometry Message 
         self.odom_pub.publish(odom_message)
 
+
+
+
+        # Making the Transform Message
         transform_message = TransformStamped()
         transform_message.header.frame_id = "odom"
         transform_message.header.stamp = self.get_clock().now().to_msg()
@@ -237,9 +250,9 @@ class Roboteq_Node(rclpy.node.Node):
         transform_message.transform.translation.x = self.x_pos
         transform_message.transform.translation.y = self.y_pos
         transform_message.transform.translation.z = 0.0
-        transform_message.transform.rotation = quat_message
-
+        transform_message.transform.rotation = quaternion_message
         self.tf_broadcaster.sendTransform(transform_message)
+        # Transform Message
 
         if ( self.get_parameter('debugging_state').get_parameter_value().bool_value ):
             self.get_logger().info('generate_odom_and_tf:\n' + \
@@ -248,7 +261,8 @@ class Roboteq_Node(rclpy.node.Node):
                                    '    Current Theta Value (Rounded): ' + str(int(math.degrees(self.theta_rads))) + '\n' + \
                                    '    Current Position: ' + str([self.x_pos,self.y_pos]) + '\n'
                                    )
-                            
+
+
     def quaternion_from_euler(self, ai, aj, ak):
         ai /= 2.0
         aj /= 2.0
@@ -263,12 +277,13 @@ class Roboteq_Node(rclpy.node.Node):
         cs = ci*sk
         sc = si*ck
         ss = si*sk
-        q = np.empty((4, ))
-        q[0] = cj*sc - sj*cs
-        q[1] = cj*ss + sj*cc
-        q[2] = cj*cs - sj*sc
-        q[3] = cj*cc + sj*ss
-        return q
+        quaternion_message = Quaternion()
+        quaternion_message.x = cj*sc - sj*cs
+        quaternion_message.y = cj*ss + sj*cc
+        quaternion_message.z = cj*cs - sj*sc
+        quaternion_message.w = cj*cc + sj*ss
+
+        return quaternion_message
 
 
     def cmd_vel_callback(self, twist_msg: Twist):
