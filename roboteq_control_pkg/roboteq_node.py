@@ -146,8 +146,8 @@ class Roboteq_Node(rclpy.node.Node):
         self.current_theta_in_radians = 0.0
 
         # Initializing data lists used in covariance calculations
-        self.twist_data_list: list[list[int]] = [] 
-        self.pose_data_list: list[list[int]] = [] 
+        self.twist_data_list: list[list[int]] = [[],[],[],[],[],[]] 
+        self.pose_data_list: list[list[int]] = [[],[],[],[],[],[]] 
 
         # Creating the timer that will periodically publish the odometry message to the odometry topic at the rate set by 'odom_pub_rate_hz'
         timer_period = (1.0 / self.get_parameter('odom_pub_rate_hz').get_parameter_value().double_value)
@@ -231,12 +231,6 @@ class Roboteq_Node(rclpy.node.Node):
         odometry_pose_message.pose.position.z = 0.0
         odometry_pose_message.pose.orientation = self.quaternion_from_euler(0,0, self.current_theta_in_radians)
 
-        # If the data set used to calculate the covariance is too large, delete the first element before adding the new values on
-        if ( len(self.pose_data_list[0]) >= self.get_parameter('covariance_data_depth').get_parameter_value().integer_value ):
-            # X Velocity, Y Velocity, Z Velocity, Angular X Velocity, Angular Z Velocity, Angular Z Velocity
-            for twist_component_data_set in self.pose_data_list:
-                twist_component_data_set.pop(0)
-
         # X position, Y position, Z position, X rotation (roll), Y rotation (pitch), Z rotation (yaw)
         values_to_add_to_pose_data = [self.current_x_position, self.current_y_position, 0.0, 0.0, 0.0, self.current_theta_in_radians]
 
@@ -244,8 +238,16 @@ class Roboteq_Node(rclpy.node.Node):
         for new_value_index in range(len(values_to_add_to_pose_data)):
             self.pose_data_list[new_value_index].append(values_to_add_to_pose_data[new_value_index])
 
+        # If the data set used to calculate the covariance is too large, delete the first element before adding the new values on
+        if ( len(self.pose_data_list[0]) >= self.get_parameter('covariance_data_depth').get_parameter_value().integer_value ):
+            # X Velocity, Y Velocity, Z Velocity, Angular X Velocity, Angular Z Velocity, Angular Z Velocity
+            for twist_component_data_set in self.pose_data_list:
+                twist_component_data_set.pop(0)
+
         # CALCULATING COVARIANCE
-        odometry_pose_message.covariance = np.cov(np.array(self.pose_data_list), bias=True)
+        # https://datatofish.com/covariance-matrix-python/
+        pose_data = np.array(self.pose_data_list)
+        odometry_pose_message.covariance = np.cov(pose_data, bias=True)
 
         # Populating the odometry message with the pose message that was just created 
         odometry_message.pose = odometry_pose_message
@@ -264,12 +266,6 @@ class Roboteq_Node(rclpy.node.Node):
         odometry_twist_message.twist.angular.y = 0.0
         odometry_twist_message.twist.angular.z = curr_angular_z_velocity
 
-        # If the data set used to calculate the covariance is too large, delete the first element before adding the new values on
-        if ( len(self.twist_data_list[0]) >= self.get_parameter('covariance_data_depth').get_parameter_value().integer_value ):
-            # X Velocity, Y Velocity, Z Velocity, Angular X Velocity, Angular Z Velocity, Angular Z Velocity
-            for twist_component_data_set in self.twist_data_list:
-                twist_component_data_set.pop(0)
-
         # X Velocity, Y Velocity, Z Velocity, Angular X Velocity, Angular Z Velocity, Angular Z Velocity
         values_to_add_to_twist_data = [x_velocity, y_velocity, 0.0, 0.0, 0.0, curr_angular_z_velocity]
 
@@ -277,8 +273,16 @@ class Roboteq_Node(rclpy.node.Node):
         for new_value_index in range(len(values_to_add_to_twist_data)):
             self.twist_data_list[new_value_index].append(values_to_add_to_pose_data[new_value_index])
 
+        # If the data set used to calculate the covariance is too large, delete the first element before adding the new values on
+        if ( len(self.twist_data_list[0]) >= self.get_parameter('covariance_data_depth').get_parameter_value().integer_value ):
+            # X Velocity, Y Velocity, Z Velocity, Angular X Velocity, Angular Z Velocity, Angular Z Velocity
+            for twist_component_data_set in self.twist_data_list:
+                twist_component_data_set.pop(0)
+
         # CALCULATING COVARIANCE
-        odometry_twist_message.covariance = np.cov(np.array(self.twist_data_list), bias=True)
+        # https://datatofish.com/covariance-matrix-python/
+        twist_data = np.array(self.twist_data_list)
+        odometry_twist_message.covariance = np.cov(twist_data, bias=True)
 
         # Populating the odometry message with the twist message that was just created 
         odometry_message.twist = odometry_twist_message

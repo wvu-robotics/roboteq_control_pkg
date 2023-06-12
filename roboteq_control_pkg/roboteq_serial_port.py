@@ -64,6 +64,8 @@ class RoboteqSerialPort(serial.Serial):
         self.runtime_queries_max_len = 3 
         self.maintenance_command_max_len = 5 
 
+        self.motor_count = motor_count
+
         super(RoboteqSerialPort,self).__init__(
             port= port,
             baudrate= baudrate,
