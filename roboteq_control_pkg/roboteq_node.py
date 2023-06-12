@@ -247,7 +247,7 @@ class Roboteq_Node(rclpy.node.Node):
         # CALCULATING COVARIANCE
         # https://datatofish.com/covariance-matrix-python/
         pose_data = np.array(self.pose_data_list)
-        odometry_pose_message.covariance = np.cov(pose_data, bias=True)
+        odometry_pose_message.covariance = np.cov(pose_data, bias=True).flatten()
 
         # Populating the odometry message with the pose message that was just created 
         odometry_message.pose = odometry_pose_message
@@ -282,7 +282,7 @@ class Roboteq_Node(rclpy.node.Node):
         # CALCULATING COVARIANCE
         # https://datatofish.com/covariance-matrix-python/
         twist_data = np.array(self.twist_data_list)
-        odometry_twist_message.covariance = np.cov(twist_data, bias=True)
+        odometry_pose_message.covariance = np.cov(twist_data, bias=True).flatten()
 
         # Populating the odometry message with the twist message that was just created 
         odometry_message.twist = odometry_twist_message
@@ -298,7 +298,7 @@ class Roboteq_Node(rclpy.node.Node):
         transform_message.header.stamp = self.get_clock().now().to_msg()
         transform_message.child_frame_id = "base_link"
         transform_message.transform.translation.x = self.current_x_position
-        transform_message.transform.translation.y = self.current_x_position
+        transform_message.transform.translation.y = self.current_y_position
         transform_message.transform.translation.z = 0.0
         transform_message.transform.rotation = self.quaternion_from_euler(0,0, self.current_theta_in_radians)
 
@@ -312,8 +312,8 @@ class Roboteq_Node(rclpy.node.Node):
             self.get_logger().info('generate_odom_and_tf:\n' + \
                                    '    RPM Query Values: ' + str(rpm_query_output) + '\n' + \
                                    '    Adjusted RPM Values (Rounded): ' + str([int(rpm_value) for rpm_value in gear_reduced_valid_rpm_values]) + '\n' + \
-                                   '    Current Theta Value (Rounded): ' + str(int(math.degrees(self.theta_rads))) + '\n' + \
-                                   '    Current Position: ' + str([self.x_position,self.y_position]) + '\n'
+                                   '    Current Theta Value (Rounded): ' + str(int(math.degrees(self.current_theta_in_radians))) + '\n' + \
+                                   '    Current Position: ' + str([self.current_x_position,self.current_y_position]) + '\n'
                                    )
 
 
