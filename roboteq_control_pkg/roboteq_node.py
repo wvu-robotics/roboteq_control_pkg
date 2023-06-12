@@ -30,7 +30,7 @@ from nav_msgs.msg import Odometry
 from tf2_ros import TransformBroadcaster
 
 from .roboteq_serial_port import RoboteqSerialPort
-from .roboteq_constants import *
+from .roboteq_constants import RT_RUNTIME_QUERIES, RT_RUNTIME_COMMANDS
 
 # ROS CONSTANTS 
 # -------------
@@ -82,7 +82,6 @@ class Roboteq_Node(rclpy.node.Node):
         self.declare_parameter('cmd_vel_delay_sec',DEFAULT_COMMAND_VEL_CALLBACK_DELAY)
         # ----------------------
 
-
         # DEVICE, MOTOR, AND INTRINSIC PARAMETERS
         # ----------------------
         self.declare_parameter('left_roboteq_port', DEFAULT_LEFT_SERIAL_PORT)
@@ -92,89 +91,76 @@ class Roboteq_Node(rclpy.node.Node):
         self.declare_parameter('track_width', DEFAULT_TRACK_WIDTH) 
         # ----------------------
 
-
         # SAFETY & MISC PARAMETERS
         # ----------------------
-        self.declare_parameter('covariance_depth', DEFAULT_COVARIANCE_DATA_SET_MAX_DEPTH)
+        self.declare_parameter('covariance_data_depth', DEFAULT_COVARIANCE_DATA_SET_MAX_DEPTH)
         self.declare_parameter('debugging_state', DEFAULT_DEBUGGING)
         self.declare_parameter('max_linear_speed', DEFAULT_MAX_METERS_PER_SECOND)
         self.declare_parameter('max_rpm', (DEFAULT_MAX_METERS_PER_SECOND) * (60.0/1.0) / (2.0 * math.pi * DEFAULT_WHEEL_RADIUS) )
         # ----------------------
 
-
+        # Creating the RoboteqSerialPort that corresponds to the left roboteq and right wheels of retailbot
         self.left_roboteq = RoboteqSerialPort(
             port= self.get_parameter('left_roboteq_port').get_parameter_value().string_value,
             baudrate= DEFAULT_BAUD,
             timeout= DEFAULT_TIMEOUT,
             motor_count= MOTORS_PER_ROBOTEQ
         )
+        # Connecting to the left serial port corresponding to the left roboteq on retailbot
+        self.left_roboteq.connect_serial()
 
+        # Creating the RoboteqSerialPort that corresponds to the right roboteq and right wheels of retailbot
         self.right_roboteq = RoboteqSerialPort(
             port= self.get_parameter('right_roboteq_port').get_parameter_value().string_value,
             baudrate= DEFAULT_BAUD,
             timeout= DEFAULT_TIMEOUT,
             motor_count= MOTORS_PER_ROBOTEQ
         )
+        # Connecting to the right serial port corresponding to the right roboteq on retailbot
+        self.right_roboteq.connect_serial()
         
+        # Creating the subscriber that will recieve Twist messages from the path planner or from teleoperation 
         self.cmd_vel_sub = self.create_subscription(
             msg_type= Twist,
             topic= self.get_parameter('cmd_vel_topic').get_parameter_value().string_value,
             callback= self.cmd_vel_callback,
             qos_profile= 1
             )
-    
+        # Creating the Publisher that will publish the Odometry message for the Roboteq
         self.odom_pub = self.create_publisher(
             msg_type= Odometry,
             topic= self.get_parameter('odom_topic').get_parameter_value().string_value,
             qos_profile= 10
             )
         
-        # Creating the timer that will periodically publish the odometry message to the odometry topic
+        # Creating the Transform Broadcaster that will publish the ROS transform (odom => base_link)
+        self.tf_broadcaster = TransformBroadcaster(self)
+
+        # Initializing the Initial Position of retailbot
+        # **Note**:
+        #   The component-wise velocities of retailbot does not need to be stored at the
+        #   class level as this value is only used in integrating to find position and is  
+        #   pseduo-instantaneous when included inside of the published odometry message 
+        self.current_x_position = 0.0
+        self.current_y_position = 0.0
+        self.current_theta_in_radians = 0.0
+
+        # Initializing data lists used in covariance calculations
+        self.twist_data_list: list[list[int]] = [] 
+        self.pose_data_list: list[list[int]] = [] 
+
+        # Creating the timer that will periodically publish the odometry message to the odometry topic at the rate set by 'odom_pub_rate_hz'
         timer_period = (1.0 / self.get_parameter('odom_pub_rate_hz').get_parameter_value().double_value)
         self.timer = self.create_timer(timer_period , self.generate_odom_and_tf)
 
-        # Initializing the relative time 
+        # Initializing the relative time used for velocity calculations
         self.rel_time = self.get_clock().now().nanoseconds 
 
-
-        # Creating the Transform Broadcaster that will publish the transform (odom => base_link)
-        self.tf_broadcaster = TransformBroadcaster(self)
-
-        self.left_roboteq.connect_serial()
-        self.right_roboteq.connect_serial()
-
-        # Initial Position
-        self.x_position = 0.0
-        self.y_position = 0.0
-        self.theta_rads = 0.0
-
-        # List comprehension makes seperate objects reducing unintended consequences of "list = [0] * 100" - this copies same object
-        zero_data = [ (0) for n in range(self.get_parameter('covariance_depth').get_parameter_value()._integer_value) ]
-
-        # Twist data for covariance calculations( linear velocity (x,y,z), angular velocity (x,y,z) )
-
-        self.x_vel_list = []
-        self.y_vel_list = [] 
-        self.z_vel_list = zero_data
-
-        self.roll_vel_list = zero_data
-        self.pitch_vel_list = zero_data
-        self.yaw_vel_list = [] 
-
-        # Pose data for covariance calculations( point (x,y,z), orientation (quaternion) )
-        self.x_position_list = []
-        self.y_position_list = [] 
-        self.z_position_list = zero_data
-
-        self.roll_list = zero_data
-        self.pitch_list = zero_data
-        self.yaw_list = []
-
-
+        # Displaying to terminal that the node's publisher and subscriber were properly generated 
         self.get_logger().info(f'roboteq_node.py:\n' + \
                                f'Odometry Outputs\nTopic: {self.odom_pub.topic}\nMessage Type: {self.odom_pub.msg_type}\n' + \
                                f'Control Inputs\nTopic: {self.cmd_vel_sub.topic}\nMessage Type: {self.cmd_vel_sub.msg_type}\n')
-
+        
 
     def generate_odom_and_tf(self):
 
@@ -186,9 +172,12 @@ class Roboteq_Node(rclpy.node.Node):
         # Get all four wheel RPMS
         rpm_query_output = self.left_roboteq.read_runtime_query(rpm_cmd) + self.right_roboteq.read_runtime_query(rpm_cmd)
 
-        # Want to place the delta time calculation close to the runtime query to ensue that the time and measurement are as close as possible
+        # **Note**:
+        #   This layout assumes that for the time of the calculation, retailbot is traveling at the 
+        #   same RPM values as was read at the beginning of the period corresponding to delta_time
         curr_time = int(self.get_clock().now().nanoseconds)
-        delta_time = int(curr_time - self.rel_time)/ 1e9
+        curr_delta_time = int(curr_time - self.rel_time)/ 1e9
+        self.rel_time = curr_time
 
         try:
             valid_rpm_values: list[int] = list(map(int,rpm_query_output))
@@ -202,78 +191,118 @@ class Roboteq_Node(rclpy.node.Node):
         clean_left_rpms = gear_reduced_valid_rpm_values[0:1]
         clean_right_rpms = gear_reduced_valid_rpm_values[2:3]
 
-        omega_l_avg = sum(clean_left_rpms)/len(clean_left_rpms)
-        omega_r_avg = sum(clean_right_rpms)/len(clean_right_rpms)
+        left_rpms = sum(clean_left_rpms)/len(clean_left_rpms)
+        right_rpms = sum(clean_right_rpms)/len(clean_right_rpms)
 
         # Get the translational velocities for each side (m/s)
-        V_r = omega_r_avg * 2 * math.pi * wheel_radius / 60 # m/s
-        V_l = omega_l_avg * 2 * math.pi * wheel_radius / 60 # m/s
+        right_linear_velcity = left_rpms * 2 * math.pi * wheel_radius / 60 # m/s
+        left_linear_velocity = right_rpms * 2 * math.pi * wheel_radius / 60 # m/s
  
         # Get the total linear velocity of the robot body using both sides.
-        V_avg = (V_r + V_l) / 2 # m / s 
+        no_component_velocity = (right_linear_velcity + left_linear_velocity) / 2 
 
-        # Calculate the delta theta value in radians, update the theta value in radians
-        delta_theta_rads = (((V_r - V_l) / track_width) * delta_time)
-        self.theta_rads += delta_theta_rads
+        # Update theta value by integrating the angular velocity (RADIANS)
+        curr_angular_z_velocity = ((right_linear_velcity - left_linear_velocity) / track_width)
+        self.current_theta_in_radians += curr_angular_z_velocity * curr_delta_time
 
-        # Get the components of translational velocity using our current theta.
-        V_x = V_avg * math.cos(self.theta_rads)
-        V_y = V_avg * math.sin(self.theta_rads)
+        # Get the components of translational velocity using the current theta.
+        x_velocity = no_component_velocity * math.cos(self.current_theta_in_radians)
+        y_velocity = no_component_velocity * math.sin(self.current_theta_in_radians)
 
-        # Now find our pose change using the velocities
-        X_delta = V_x * delta_time
-        Y_delta = V_y * delta_time
-
-        # Now update our position.
-        self.x_position += X_delta
-        self.y_position += Y_delta
+        # Now update the position using integrated velocity
+        self.current_x_position += x_velocity * curr_delta_time
+        self.current_y_position += y_velocity * curr_delta_time
         
-        # update the relative time and then publish odom message
-        self.rel_time = int(self.get_clock().now().nanoseconds)
 
         # Making the Odometry Message 
-        odom_message = Odometry()
+        # http://docs.ros.org/en/noetic/api/nav_msgs/html/msg/Odometry.html
+        odometry_message = Odometry()
+        odometry_message.header.stamp = self.get_clock().now().to_msg()
+        odometry_message.header.frame_id = "odom"
+        odometry_message.child_frame_id = "base_link"
 
-        # Header, Child Frame ID
-        odom_message.header.stamp = self.get_clock().now().to_msg()
-        odom_message.header.frame_id = "odom"
-        odom_message.child_frame_id = "base_link"
 
+        # --------------------------------------------------
         # Pose with Covariance (Positions)
         # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/PoseWithCovariance.html
-        odom_message.pose.pose.position.x = self.x_position
-        odom_message.pose.pose.position.y = self.y_position
-        odom_message.pose.pose.position.z = 0.0 # Wheel odometry can only be in 2D
+        odometry_pose_message = PoseWithCovariance()
+        odometry_pose_message.pose.position.x = self.current_x_position
+        odometry_pose_message.pose.position.y = self.current_x_position
+        odometry_pose_message.pose.position.z = 0.0
+        odometry_pose_message.pose.orientation = self.quaternion_from_euler(0,0, self.current_theta_in_radians)
 
-        quaternion_message = self.quaternion_from_euler(0,0, self.theta_rads)
-        odom_message.pose.pose.orientation = quaternion_message
+        # If the data set used to calculate the covariance is too large, delete the first element before adding the new values on
+        if ( len(self.pose_data_list[0]) >= self.get_parameter('covariance_data_depth').get_parameter_value().integer_value ):
+            # X Velocity, Y Velocity, Z Velocity, Angular X Velocity, Angular Z Velocity, Angular Z Velocity
+            for twist_component_data_set in self.pose_data_list:
+                twist_component_data_set.pop(0)
+
+        # X position, Y position, Z position, X rotation (roll), Y rotation (pitch), Z rotation (yaw)
+        values_to_add_to_pose_data = [self.current_x_position, self.current_y_position, 0.0, 0.0, 0.0, self.current_theta_in_radians]
+
+        # Updating the data used in the covariance calculations with the most up to date measurements 
+        for new_value_index in range(len(values_to_add_to_pose_data)):
+            self.pose_data_list[new_value_index].append(values_to_add_to_pose_data[new_value_index])
+
+        # CALCULATING COVARIANCE
+        odometry_pose_message.covariance = np.cov(np.array(self.pose_data_list), bias=True)
+
+        # Populating the odometry message with the pose message that was just created 
+        odometry_message.pose = odometry_pose_message
+        # Pose with Covariance (Positions)
+        # --------------------------------------------------
 
 
+        # --------------------------------------------------
         # Twist with Covariance (Velocities)
         # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/TwistWithCovariance.html
-        odom_message.twist.twist.linear.x = V_x
-        odom_message.twist.twist.linear.y = V_y
-        odom_message.twist.twist.linear.z = 0.0 # Wheel odometry can only be in 2D
+        odometry_twist_message = TwistWithCovariance()
+        odometry_twist_message.twist.linear.x = x_velocity
+        odometry_twist_message.twist.linear.y = y_velocity
+        odometry_twist_message.twist.linear.z = 0.0
+        odometry_twist_message.twist.angular.x = 0.0
+        odometry_twist_message.twist.angular.y = 0.0
+        odometry_twist_message.twist.angular.z = curr_angular_z_velocity
 
-        odom_message.twist.twist.angular.x = 0.0 # Wheel odometry can only be in 2D
-        odom_message.twist.twist.angular.y = 0.0 # Wheel odometry can only be in 2D
-        odom_message.twist.twist.angular.z = self.theta_rads
+        # If the data set used to calculate the covariance is too large, delete the first element before adding the new values on
+        if ( len(self.twist_data_list[0]) >= self.get_parameter('covariance_data_depth').get_parameter_value().integer_value ):
+            # X Velocity, Y Velocity, Z Velocity, Angular X Velocity, Angular Z Velocity, Angular Z Velocity
+            for twist_component_data_set in self.twist_data_list:
+                twist_component_data_set.pop(0)
 
+        # X Velocity, Y Velocity, Z Velocity, Angular X Velocity, Angular Z Velocity, Angular Z Velocity
+        values_to_add_to_twist_data = [x_velocity, y_velocity, 0.0, 0.0, 0.0, curr_angular_z_velocity]
 
-        # Publishing the Odometry Message 
-        self.odom_pub.publish(odom_message)
+        # Updating the data used in the covariance calculations with the most up to date measurements 
+        for new_value_index in range(len(values_to_add_to_twist_data)):
+            self.twist_data_list[new_value_index].append(values_to_add_to_pose_data[new_value_index])
+
+        # CALCULATING COVARIANCE
+        odometry_twist_message.covariance = np.cov(np.array(self.twist_data_list), bias=True)
+
+        # Populating the odometry message with the twist message that was just created 
+        odometry_message.twist = odometry_twist_message
+
+        # Twist with Covariance (Velocities)
+        # --------------------------------------------------
+
 
         # Making the Transform Message
+        # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/TransformStamped.html
         transform_message = TransformStamped()
         transform_message.header.frame_id = "odom"
         transform_message.header.stamp = self.get_clock().now().to_msg()
         transform_message.child_frame_id = "base_link"
-        transform_message.transform.translation.x = self.x_position
-        transform_message.transform.translation.y = self.y_position
+        transform_message.transform.translation.x = self.current_x_position
+        transform_message.transform.translation.y = self.current_x_position
         transform_message.transform.translation.z = 0.0
-        transform_message.transform.rotation = quaternion_message
+        transform_message.transform.rotation = self.quaternion_from_euler(0,0, self.current_theta_in_radians)
+
+        # Publishing the Odometry Message 
+        self.odom_pub.publish(odometry_message)
+
+        # Sending the Transform Message
         self.tf_broadcaster.sendTransform(transform_message)
-        # Transform Message
 
         if ( self.get_parameter('debugging_state').get_parameter_value().bool_value ):
             self.get_logger().info('generate_odom_and_tf:\n' + \
@@ -284,7 +313,7 @@ class Roboteq_Node(rclpy.node.Node):
                                    )
 
 
-    def quaternion_from_euler(self, ai, aj, ak):
+    def quaternion_from_euler(self, ai, aj, ak):      
         ai /= 2.0
         aj /= 2.0
         ak /= 2.0
@@ -303,7 +332,6 @@ class Roboteq_Node(rclpy.node.Node):
         quaternion_message.y = cj*ss + sj*cc
         quaternion_message.z = cj*cs - sj*sc
         quaternion_message.w = cj*cc + sj*ss
-
         return quaternion_message
 
 
