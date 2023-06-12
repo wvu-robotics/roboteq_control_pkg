@@ -1,5 +1,6 @@
 # roboteq_serial_port.py
 # By: Nathan Adkins 
+# email: npa00003@mix.wvu.edu
 # WVU IRL 
 
 '''
@@ -22,28 +23,31 @@ TCP Communication Commands                    page 397
 
 import serial
 
-LEFT_PORT = '/dev/left_roboteq'
-RIGHT_PORT = '/dev/right_roboteq'
-BAUD = 115200 
-TIMEOUT = 5
-
-MAX_MOTOR_COUNT = 3 
-MAX_RUNTIME_COMMANDS_LENGTH = 3 
-MAX_RUNTIME_QUERIES_LENGTH = 3
-MAX_MAINTENANCE_COMMAND_LENGTH = 5
-
 class RoboteqSerialPort(serial.Serial):
     '''This class is used to abstract a serial port to a roboteq controller serial port 
 
-        class is a super class of serial
+        This class is a super class of serial
 
         Attributes
         ----------
+        max_motor_count: int 
+            The maximum motors that are able to be connected to all roboteq models (used for input validation)
+
+        runtime_commands_max_len: int
+            The maximum number of characters in a runtime command for a roboteq (used for input validation)
+
+        runtime_queries_max_len: int
+            The maximum number of characters in a runtime query command for a roboteq (used for input validation)
+
+        maintenance_command_max_len: int
+            The maximum number of characters in a runtime query command for a roboteq (used for input validation)
+
         motor_count : int
             The number of motors connected to the downstream roboteq controller
+            
         self: serial
             The serial port that corresponds to the roboteq controller's serial port 
-
+        
         Methods
         -------
         write_runtime_command(self, cmd_str: str, cmd_vals: list[str])
@@ -54,14 +58,19 @@ class RoboteqSerialPort(serial.Serial):
     '''
 
     def __init__(self, port, baudrate, timeout, motor_count):
+
+        self.max_motor_count = 3
+        self.runtime_commands_max_len = 3 
+        self.runtime_queries_max_len = 3 
+        self.maintenance_command_max_len = 5 
+
         super(RoboteqSerialPort,self).__init__(
             port= port,
             baudrate= baudrate,
             timeout= timeout,
         )
-        if motor_count > MAX_MOTOR_COUNT:
+        if motor_count > self.max_motor_count:
             Exception("Invalid number of motors for Roboteq")
-        self.motor_count = motor_count
 
 
     def write_runtime_command(self, cmd_str: str, cmd_vals: list[str]):
@@ -80,7 +89,7 @@ class RoboteqSerialPort(serial.Serial):
             None
         '''
         runtime_char = '!'
-        if len(cmd_str) > MAX_RUNTIME_COMMANDS_LENGTH:
+        if len(cmd_str) > self.runtime_commands_max_len:
             Exception("Invalid command length for runtime commands.")
         motor_cmd_string = ''
         for motor_num in range(self.motor_count):
@@ -103,7 +112,7 @@ class RoboteqSerialPort(serial.Serial):
         if(self.is_open):
             self.reset_input_buffer()
             query_char = '?'
-            if len(cmd_str) > MAX_RUNTIME_QUERIES_LENGTH:
+            if len(cmd_str) > self.runtime_queries_max_len:
                 Exception("Invalid command length for runtime queries.")
             query_returns: list[str]= [] 
             # removing unvalid characters from the read byte string
@@ -134,7 +143,7 @@ class RoboteqSerialPort(serial.Serial):
         '''
         maint_char = '%'
         safety_key = 321654987
-        if len(cmd_str) > MAX_MAINTENANCE_COMMAND_LENGTH:
+        if len(cmd_str) > self.maintenance_command_max_len:
             Exception("Invalid command length for maintenance commands.")
    
         motor_maint_cmd_string = f'{maint_char}{cmd_str} {safety_key} \r'
@@ -142,18 +151,40 @@ class RoboteqSerialPort(serial.Serial):
 
 
     def connect_serial(self):
+        '''This function writes attempts to connect to the serial ports 
+            
+            Parameters
+            ----------
+            None
+
+            Returns
+            -------
+            True if successfully connected to the serial ports, False if unsuccessful 
+        '''
         try:
             self.open()
             if (self.is_open):
                 return True
         except serial.SerialException as serExcpt:
             print(str(serExcpt))
+            return False
 
 
     def disconnect_serial(self):
+        '''This function writes attempts to disconnect from the serial ports 
+            
+            Parameters
+            ----------
+            None
+
+            Returns
+            -------
+            True if successfully disconnected from the serial ports, False if unsuccessful 
+        '''
         try:
             self.close()
             if (not self.is_open):
                 return True
         except serial.SerialException as serExcpt:
             print(str(serExcpt))
+            return False

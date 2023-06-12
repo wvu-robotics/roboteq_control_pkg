@@ -1,5 +1,6 @@
 # generate_roboteq_constants.py
 # By: Nathan Adkins 
+# email: npa00003@mix.wvu.edu
 # WVU IRL 
 
 '''
@@ -22,8 +23,6 @@ TCP Communication Commands                    page 397
 
 import csv, os
 
-
-# ***These need to change on ubuntu machine:***
 GENERATED_FILE_PATH = 'src/hardware_interfacing/roboteq_control_pkg/roboteq_control_pkg/roboteq_constants.py'
 CSV_DIRECTORY = 'src/hardware_interfacing/roboteq_control_pkg/roboteq_control_pkg/gen_roboteq_consts'
 REPLACED_CHARACTERS = [' ','&','-','/','(',')']
@@ -81,10 +80,10 @@ def generate_constants_from_csv():
 
     print("Created the constants file at the following file path:\n" + "     " + GENERATED_FILE_PATH)
 
+
 def main():
     generate_constants_from_csv()
 
+
 if __name__ == '__main__':
     main()
-
-

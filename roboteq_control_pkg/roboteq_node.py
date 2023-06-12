@@ -1,5 +1,6 @@
 # roboteq_node.py
 # By: Nathan Adkins 
+# email: npa00003@mix.wvu.edu
 # WVU IRL 
 '''
 Roboteq User Manual: https://www.roboteq.com/docman-list/motor-controllers-documents-and-files/documentation/user-manual/272-roboteq-controllers-user-manual-v21/file
@@ -37,7 +38,7 @@ DEFAULT_SUB_CMD_VEL_TOPIC = 'cmd_vel' # ROS topic this node subscribes to in the
 DEFAULT_PUB_ODOM_TOPIC = 'roboteq_odom' # ROS topic this node publishes the odometry message to (nav_msgs.msg Odometry)
 
 DEFAULT_ODOM_PUBLISH_RATE_HZ = 100.0 # Number of odom publishes per second
-DEFAULT_COMMAND_VEL_CALLBACK_DELAY = 0.005 # Seconds forced between each call of the callback function 
+DEFAULT_COMMAND_VEL_CALLBACK_DELAY = 0.005 # Seconds forced between each call of the odometry callback function 
 # -------------
 
 
@@ -45,8 +46,8 @@ DEFAULT_COMMAND_VEL_CALLBACK_DELAY = 0.005 # Seconds forced between each call of
 # -------------------------------------- 
 MOTORS_PER_ROBOTEQ = 2 # Motors per Roboteq 
 
-DEFAULT_LEFT_PORT = '/dev/left_roboteq' # Device path to the left roboteq motor controller
-DEFAULT_RIGHT_PORT = '/dev/right_roboteq' # Device path to the right roboteq motor controller
+DEFAULT_LEFT_SERIAL_PORT = '/dev/left_roboteq' # Device path to the left roboteq motor controller
+DEFAULT_RIGHT_SERIAL_PORT = '/dev/right_roboteq' # Device path to the right roboteq motor controller
 
 DEFAULT_WHEEL_RADIUS = 0.125 # Radius of the wheels (METERS)
 DEFAULT_TRACK_WIDTH = 0.77 # Distance between wheels on either side of chassis (Bilaterally) (METERS)
@@ -62,7 +63,8 @@ DEFAULT_TIMEOUT = 5
 # SAFETY & MISC CONSTANTS 
 # -----------------------
 DEFAULT_MAX_METERS_PER_SECOND = 2.0 # Maximum meters per second 
-DEFAULT_DEBUGGING = True 
+DEFAULT_COVARIANCE_DATA_SET_MAX_DEPTH = 100 # Number of data points collected for covariance calculations on the Twist and Pose
+DEFAULT_DEBUGGING = False 
 # ----------------------
 
 
@@ -81,10 +83,10 @@ class Roboteq_Node(rclpy.node.Node):
         # ----------------------
 
 
-        # ----------------------
         # DEVICE, MOTOR, AND INTRINSIC PARAMETERS
-        self.declare_parameter('left_roboteq_port', DEFAULT_LEFT_PORT)
-        self.declare_parameter('right_roboteq_port', DEFAULT_RIGHT_PORT)
+        # ----------------------
+        self.declare_parameter('left_roboteq_port', DEFAULT_LEFT_SERIAL_PORT)
+        self.declare_parameter('right_roboteq_port', DEFAULT_RIGHT_SERIAL_PORT)
         self.declare_parameter('gear_reduction_ratio', DEFAULT_GEAR_REDUCTION_RATIO)
         self.declare_parameter('wheel_radius', DEFAULT_WHEEL_RADIUS)
         self.declare_parameter('track_width', DEFAULT_TRACK_WIDTH) 
@@ -93,6 +95,7 @@ class Roboteq_Node(rclpy.node.Node):
 
         # SAFETY & MISC PARAMETERS
         # ----------------------
+        self.declare_parameter('covariance_depth', DEFAULT_COVARIANCE_DATA_SET_MAX_DEPTH)
         self.declare_parameter('debugging_state', DEFAULT_DEBUGGING)
         self.declare_parameter('max_linear_speed', DEFAULT_MAX_METERS_PER_SECOND)
         self.declare_parameter('max_rpm', (DEFAULT_MAX_METERS_PER_SECOND) * (60.0/1.0) / (2.0 * math.pi * DEFAULT_WHEEL_RADIUS) )
@@ -126,9 +129,11 @@ class Roboteq_Node(rclpy.node.Node):
             qos_profile= 10
             )
         
-        # Creating the timer that will 
+        # Creating the timer that will periodically publish the odometry message to the odometry topic
         timer_period = (1.0 / self.get_parameter('odom_pub_rate_hz').get_parameter_value().double_value)
         self.timer = self.create_timer(timer_period , self.generate_odom_and_tf)
+
+        # Initializing the relative time 
         self.rel_time = self.get_clock().now().nanoseconds 
 
 
@@ -139,9 +144,32 @@ class Roboteq_Node(rclpy.node.Node):
         self.right_roboteq.connect_serial()
 
         # Initial Position
-        self.x_pos = 0.0
-        self.y_pos = 0.0
+        self.x_position = 0.0
+        self.y_position = 0.0
         self.theta_rads = 0.0
+
+        # List comprehension makes seperate objects reducing unintended consequences of "list = [0] * 100" - this copies same object
+        zero_data = [ (0) for n in range(self.get_parameter('covariance_depth').get_parameter_value()._integer_value) ]
+
+        # Twist data for covariance calculations( linear velocity (x,y,z), angular velocity (x,y,z) )
+
+        self.x_vel_list = []
+        self.y_vel_list = [] 
+        self.z_vel_list = zero_data
+
+        self.roll_vel_list = zero_data
+        self.pitch_vel_list = zero_data
+        self.yaw_vel_list = [] 
+
+        # Pose data for covariance calculations( point (x,y,z), orientation (quaternion) )
+        self.x_position_list = []
+        self.y_position_list = [] 
+        self.z_position_list = zero_data
+
+        self.roll_list = zero_data
+        self.pitch_list = zero_data
+        self.yaw_list = []
+
 
         self.get_logger().info(f'roboteq_node.py:\n' + \
                                f'Odometry Outputs\nTopic: {self.odom_pub.topic}\nMessage Type: {self.odom_pub.msg_type}\n' + \
@@ -197,8 +225,8 @@ class Roboteq_Node(rclpy.node.Node):
         Y_delta = V_y * delta_time
 
         # Now update our position.
-        self.x_pos += X_delta
-        self.y_pos += Y_delta
+        self.x_position += X_delta
+        self.y_position += Y_delta
         
         # update the relative time and then publish odom message
         self.rel_time = int(self.get_clock().now().nanoseconds)
@@ -211,44 +239,37 @@ class Roboteq_Node(rclpy.node.Node):
         odom_message.header.frame_id = "odom"
         odom_message.child_frame_id = "base_link"
 
-        # Pose with Covariance 
+        # Pose with Covariance (Positions)
         # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/PoseWithCovariance.html
-        odom_message.pose.pose.position.x = self.x_pos
-        odom_message.pose.pose.position.y = self.y_pos
-        odom_message.pose.pose.position.z = 0.0
+        odom_message.pose.pose.position.x = self.x_position
+        odom_message.pose.pose.position.y = self.y_position
+        odom_message.pose.pose.position.z = 0.0 # Wheel odometry can only be in 2D
 
         quaternion_message = self.quaternion_from_euler(0,0, self.theta_rads)
         odom_message.pose.pose.orientation = quaternion_message
 
-        # Twist with Covariance
+
+        # Twist with Covariance (Velocities)
         # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/TwistWithCovariance.html
         odom_message.twist.twist.linear.x = V_x
         odom_message.twist.twist.linear.y = V_y
-        odom_message.twist.twist.linear.z = 0.0
+        odom_message.twist.twist.linear.z = 0.0 # Wheel odometry can only be in 2D
 
-        odom_message.twist.twist.angular.x = 0.0
-        odom_message.twist.twist.angular.x = 0.0
-        odom_message.twist.twist.angular.x = 0.0
-
-
-
-
-
+        odom_message.twist.twist.angular.x = 0.0 # Wheel odometry can only be in 2D
+        odom_message.twist.twist.angular.y = 0.0 # Wheel odometry can only be in 2D
+        odom_message.twist.twist.angular.z = self.theta_rads
 
 
         # Publishing the Odometry Message 
         self.odom_pub.publish(odom_message)
-
-
-
 
         # Making the Transform Message
         transform_message = TransformStamped()
         transform_message.header.frame_id = "odom"
         transform_message.header.stamp = self.get_clock().now().to_msg()
         transform_message.child_frame_id = "base_link"
-        transform_message.transform.translation.x = self.x_pos
-        transform_message.transform.translation.y = self.y_pos
+        transform_message.transform.translation.x = self.x_position
+        transform_message.transform.translation.y = self.y_position
         transform_message.transform.translation.z = 0.0
         transform_message.transform.rotation = quaternion_message
         self.tf_broadcaster.sendTransform(transform_message)
@@ -257,9 +278,9 @@ class Roboteq_Node(rclpy.node.Node):
         if ( self.get_parameter('debugging_state').get_parameter_value().bool_value ):
             self.get_logger().info('generate_odom_and_tf:\n' + \
                                    '    RPM Query Values: ' + str(rpm_query_output) + '\n' + \
-                                   '    Adjusted RPM Values (Rounded): ' + str([int(rpm_value) for rpm_value in rpm_values]) + '\n' + \
+                                   '    Adjusted RPM Values (Rounded): ' + str([int(rpm_value) for rpm_value in gear_reduced_valid_rpm_values]) + '\n' + \
                                    '    Current Theta Value (Rounded): ' + str(int(math.degrees(self.theta_rads))) + '\n' + \
-                                   '    Current Position: ' + str([self.x_pos,self.y_pos]) + '\n'
+                                   '    Current Position: ' + str([self.x_position,self.y_position]) + '\n'
                                    )
 
 
