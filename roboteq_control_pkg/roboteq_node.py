@@ -227,7 +227,7 @@ class Roboteq_Node(rclpy.node.Node):
         # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/PoseWithCovariance.html
         odometry_pose_message = PoseWithCovariance()
         odometry_pose_message.pose.position.x = self.current_x_position
-        odometry_pose_message.pose.position.y = self.current_x_position
+        odometry_pose_message.pose.position.y = self.current_y_position
         odometry_pose_message.pose.position.z = 0.0
         odometry_pose_message.pose.orientation = self.quaternion_from_euler(0,0, self.current_theta_in_radians)
 
@@ -282,7 +282,7 @@ class Roboteq_Node(rclpy.node.Node):
         # CALCULATING COVARIANCE
         # https://datatofish.com/covariance-matrix-python/
         twist_data = np.array(self.twist_data_list)
-        odometry_pose_message.covariance = np.cov(twist_data, bias=True).flatten()
+        odometry_twist_message.covariance = np.cov(twist_data, bias=True).flatten()
 
         # Populating the odometry message with the twist message that was just created 
         odometry_message.twist = odometry_twist_message
