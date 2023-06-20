@@ -202,7 +202,7 @@ class Roboteq_Node(rclpy.node.Node):
         no_component_velocity = (right_linear_velcity + left_linear_velocity) / 2 
 
         # Update theta value by integrating the angular velocity (RADIANS)
-        curr_angular_z_velocity = ((right_linear_velcity - left_linear_velocity) / track_width)
+        curr_angular_z_velocity = ((left_linear_velocity - right_linear_velcity) / track_width)
         self.current_theta_in_radians += curr_angular_z_velocity * curr_delta_time
 
         # Get the components of translational velocity using the current theta.
@@ -313,7 +313,9 @@ class Roboteq_Node(rclpy.node.Node):
                                    '    RPM Query Values: ' + str(rpm_query_output) + '\n' + \
                                    '    Adjusted RPM Values (Rounded): ' + str([int(rpm_value) for rpm_value in gear_reduced_valid_rpm_values]) + '\n' + \
                                    '    Current Theta Value (Rounded): ' + str(int(math.degrees(self.current_theta_in_radians))) + '\n' + \
-                                   '    Current Position: ' + str([self.current_x_position,self.current_y_position]) + '\n'
+                                   '    Current Position: ' + str([self.current_x_position,self.current_y_position]) + '\n' \
+
+                                   'curr_angular_z_velocity: ' + str(curr_angular_z_velocity)
                                    )
 
 
@@ -346,10 +348,12 @@ class Roboteq_Node(rclpy.node.Node):
         cmd_vel_delay_sec = self.get_parameter('cmd_vel_delay_sec').get_parameter_value().double_value
         track_width: float = self.get_parameter('track_width').get_parameter_value().double_value
         wheel_radius: float = self.get_parameter('wheel_radius').get_parameter_value().double_value
- 
 
         def clamp(value, minimum, maximum):
             return max(minimum, min(value,maximum))
+        
+
+        
     
         right_speed = ( twist_msg.linear.x + twist_msg.angular.z * (track_width/2) ) # meters / second
         left_speed  = ( twist_msg.linear.x - twist_msg.angular.z * (track_width/2) )  # meters / second
