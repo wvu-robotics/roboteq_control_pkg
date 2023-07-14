@@ -190,3 +190,11 @@ class RoboteqSerialPort(serial.Serial):
         except serial.SerialException as serExcpt:
             print(str(serExcpt))
             return False
+        
+
+right_roboteq = RoboteqSerialPort(
+            port= '/dev/left_roboteq',
+            baudrate= 115200,
+            timeout= 5,
+            motor_count= 2
+        )

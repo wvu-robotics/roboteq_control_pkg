@@ -19,16 +19,17 @@ AC Induction Specific Commands                page 385
 CAN Communication Commands                    page 391  
 TCP Communication Commands                    page 397 
 '''
-
-import math
 import numpy as np
-import rclpy.node
-import time
+import math, rclpy, time
+from tf2_ros import TransformBroadcaster
 
+import rclpy
+from rclpy.node import Node
+
+from nav_msgs.msg import Odometry
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist, TransformStamped, PoseWithCovariance, TwistWithCovariance, Quaternion
-from nav_msgs.msg import Odometry
-from tf2_ros import TransformBroadcaster
+from retailbot_interfaces.msg import RoboteqInfo
 
 from .roboteq_serial_port import RoboteqSerialPort
 from .roboteq_constants import rt_runtime_queries, rt_runtime_commands
@@ -36,10 +37,13 @@ from .roboteq_constants import rt_runtime_queries, rt_runtime_commands
 # ROS CONSTANTS 
 # -------------
 DEFAULT_SUB_CMD_VEL_TOPIC = 'cmd_vel' # ROS topic this node subscribes to in the command velocity callback 
-DEFAULT_PUB_ODOM_TOPIC = 'roboteq_odom' # ROS topic this node publishes the odometry message to (nav_msgs.msg Odometry)
-
-DEFAULT_ODOM_PUBLISH_RATE_HZ = 100.0 # Number of odom publishes per second
 DEFAULT_COMMAND_VEL_CALLBACK_DELAY = 0.005 # Seconds forced between each call of the odometry callback function 
+
+DEFAULT_PUB_ODOM_TOPIC = 'roboteq_odom' # ROS topic this node publishes the odometry message to (nav_msgs.msg Odometry)
+DEFAULT_ODOM_PUBLISH_RATE_HZ = 100.0 # Number of odom publishes per second
+
+DEFAULT_PUB_INFO_TOPIC = 'roboteq_info' # ROS topic this node publishes roboteq info to (std_msgs.msg Float32MultiArray)
+DEFAULT_INFO_PUBLISH_RATE_HZ = 5.0 # Number of info publishes per second
 # -------------
 
 
@@ -69,19 +73,19 @@ DEFAULT_DEBUGGING = False
 # ----------------------
 
 
-class Roboteq_Node(rclpy.node.Node):
+class Roboteq_Node(Node):
 
 
     def __init__(self):
-        super().__init__(node_name='roboteq_control_node')
+        super().__init__('roboteq_control_node')
 
         # ROS PARAMETERS 
         # ----------------------
         self.declare_parameter('odom_topic', DEFAULT_PUB_ODOM_TOPIC)        
         self.declare_parameter('odom_pub_rate_hz', DEFAULT_ODOM_PUBLISH_RATE_HZ)
 
-        self.declare_parameter('roboteq_info_topic', DEFAULT_PUB_ODOM_TOPIC)
-        self.declare_parameter('roboteq_info_pub_rate_hz', DEFAULT_ODOM_PUBLISH_RATE_HZ)
+        self.declare_parameter('roboteq_info_topic', DEFAULT_PUB_INFO_TOPIC)
+        self.declare_parameter('roboteq_info_pub_rate_hz', DEFAULT_INFO_PUBLISH_RATE_HZ)
 
         self.declare_parameter('cmd_vel_topic', DEFAULT_SUB_CMD_VEL_TOPIC)
         self.declare_parameter('cmd_vel_delay_sec',DEFAULT_COMMAND_VEL_CALLBACK_DELAY)
@@ -150,8 +154,11 @@ class Roboteq_Node(rclpy.node.Node):
         self.runtime_commands = rt_runtime_commands()
         self.query_addresses = [
             self.runtime_queries.Read_Motor_Amps,
-            self.runtime_queries.Read_Volts,
+            self.runtime_queries.Read_Encoder_Count_Relative,
+            self.runtime_queries.Read_Encoder_Counter_Absolute,
+            self.runtime_queries.Read_Closed_Loop_Error,
             self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM,
+            self.runtime_queries.Read_Sensor_Errors,
             self.runtime_queries.Read_Temperature,
                                 ]
         
@@ -173,17 +180,12 @@ class Roboteq_Node(rclpy.node.Node):
 
         # Creating the timer that will periodically publish the odometry message to the odometry topic at the rate set by 'odom_pub_rate_hz'
         self.roboteq_odom_timer = self.create_timer(
-            (1.0 / self.get_parameter('odom_pub_rate_hz').get_parameter_value().double_value),
-            self.generate_odom_and_tf
+            timer_period_sec = (1.0 / self.get_parameter('odom_pub_rate_hz').get_parameter_value().double_value),
+            callback = self.generate_odom_and_tf
             )
-        # self.roboteq_info_timer = self.create_timer(
-        #     (1.0 / self.get_parameter('roboteq_info_pub_rate_hz').get_parameter_value().double_value),
-        #     self.retrieve_roboteq_info
-        #     )
 
         # Initializing the relative time used for velocity calculations
         self.rel_time = self.get_clock().now().nanoseconds 
-
 
         # Displaying to terminal that the node's publisher and subscriber were properly generated 
         self.get_logger().info(f'roboteq_node.py:\n' + \
@@ -228,20 +230,6 @@ class Roboteq_Node(rclpy.node.Node):
         time.sleep(cmd_vel_delay_sec)
 
 
-    def retrieve_roboteq_info(self):
-
-        roboteq_data_array = Float32MultiArray()
-        self.query_addresses = [
-            self.runtime_queries.Read_Motor_Amps,
-            self.runtime_queries.Read_Volts,
-            self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM,
-            self.runtime_queries.Read_Temperature,
-                                ]
-        
-        query_output: list[list] = [ [ self.left_roboteq.read_runtime_query(query) + self.right_roboteq.read_runtime_query(query) ] for query in self.runtime_queries ] 
-        self.roboteq_info_pub.publish
-
-
     def generate_odom_and_tf(self):
 
         wheel_radius = self.get_parameter('wheel_radius').get_parameter_value().double_value
@@ -251,8 +239,6 @@ class Roboteq_Node(rclpy.node.Node):
 
         # Get all four wheel RPMS
         rpm_query_output = self.left_roboteq.read_runtime_query(rpm_cmd) + self.right_roboteq.read_runtime_query(rpm_cmd)
-
-
 
         # **Note**:
         #   This layout assumes that for the time of the calculation, retailbot is traveling at the 
