@@ -25,117 +25,101 @@ from tf2_ros import TransformBroadcaster
 
 import rclpy
 from rclpy.node import Node
+import operator
 
 from nav_msgs.msg import Odometry
-from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import Twist, TransformStamped, PoseWithCovariance, TwistWithCovariance, Quaternion
 from retailbot_interfaces.msg import RoboteqInfo
 
 from .roboteq_serial_port import RoboteqSerialPort
 from .roboteq_constants import rt_runtime_queries, rt_runtime_commands
 
-# ROS CONSTANTS 
-# -------------
-DEFAULT_SUB_CMD_VEL_TOPIC = 'cmd_vel' # ROS topic this node subscribes to in the command velocity callback 
-DEFAULT_COMMAND_VEL_CALLBACK_DELAY = 0.005 # Seconds forced between each call of the odometry callback function 
-
-DEFAULT_PUB_ODOM_TOPIC = 'roboteq_odom' # ROS topic this node publishes the odometry message to (nav_msgs.msg Odometry)
-DEFAULT_ODOM_PUBLISH_RATE_HZ = 100.0 # Number of odom publishes per second
-
-DEFAULT_PUB_INFO_TOPIC = 'roboteq_info' # ROS topic this node publishes roboteq info to (std_msgs.msg Float32MultiArray)
-DEFAULT_INFO_PUBLISH_RATE_HZ = 5.0 # Number of info publishes per second
-
-DEFAULT_ODOM_FRAME_ID = 'odom' # Frame ID of the odometry message published by this node
-DEFAULT_ODOM_CHILD_FRAME_ID = 'base_link' # Child Frame ID of the odometry message published by this node
-# -------------
-
-
-# DEVICE, MOTOR, AND INTRINSIC CONSTANTS
-# -------------------------------------- 
-MOTORS_PER_ROBOTEQ = 2 # Motors per Roboteq 
-
-DEFAULT_LEFT_SERIAL_PORT = '/dev/left_roboteq' # Device path to the left roboteq motor controller
-DEFAULT_RIGHT_SERIAL_PORT = '/dev/right_roboteq' # Device path to the right roboteq motor controller
-
-DEFAULT_WHEEL_RADIUS = 0.125 # Radius of the wheels (METERS)
-DEFAULT_TRACK_WIDTH = 0.77 # Distance between wheels on either side of chassis (Bilaterally) (METERS)
-
-FUDGE_VALUE_NO_IDEA_WHY_THIS_WORKS_FIGURE_OUT_LATER_NEED_TO_MOVE_ON = 10
-DEFAULT_GEAR_REDUCTION_RATIO = ((12.0/40.0) ** 3) * FUDGE_VALUE_NO_IDEA_WHY_THIS_WORKS_FIGURE_OUT_LATER_NEED_TO_MOVE_ON # Found by looking at the output gears on the gearbox
-
-DEFAULT_BAUD = 115200 # Bits per second / pulses per second (Value acceptable by roboteqs)
-DEFAULT_TIMEOUT = 5
-# -------------------------------------- 
-
-
-# SAFETY & MISC CONSTANTS 
-# -----------------------
-DEFAULT_MAX_METERS_PER_SECOND = 0.5 # Maximum meters per second 
-DEFAULT_COVARIANCE_DATA_SET_MAX_DEPTH = 1000 # Number of data points collected for covariance calculations on the Twist and Pose
-DEFAULT_DEBUGGING = False 
-# ----------------------
-
-
 class Roboteq_Node(Node):
 
-
     def __init__(self):
+        
         super().__init__('roboteq_control_node')
 
         # ROS PARAMETERS 
-        # ----------------------
-        self.declare_parameter('odom_topic', DEFAULT_PUB_ODOM_TOPIC)        
-        self.declare_parameter('odom_pub_rate_hz', DEFAULT_ODOM_PUBLISH_RATE_HZ)
+        self.declare_parameter('odom_topic', 'roboteq_odom')        
+        self.declare_parameter('odom_pub_rate_hz', 100.0)
 
-        self.declare_parameter('roboteq_info_topic', DEFAULT_PUB_INFO_TOPIC)
-        self.declare_parameter('roboteq_info_pub_rate_hz', DEFAULT_INFO_PUBLISH_RATE_HZ)
+        self.declare_parameter('roboteq_info_topic', 'roboteq_info')
+        self.declare_parameter('roboteq_info_pub_rate_hz', 100.0 )
 
-        self.declare_parameter('cmd_vel_topic', DEFAULT_SUB_CMD_VEL_TOPIC)
-        self.declare_parameter('cmd_vel_delay_sec',DEFAULT_COMMAND_VEL_CALLBACK_DELAY)
+        self.declare_parameter('cmd_vel_topic', 'cmd_vel')
+        self.declare_parameter('cmd_vel_delay_sec', 0.005 )
 
-        self.declare_parameter('odom_frame_id',DEFAULT_ODOM_FRAME_ID)
-        self.declare_parameter('odom_child_frame_id',DEFAULT_ODOM_CHILD_FRAME_ID)
-        # ----------------------
+        self.declare_parameter('odom_frame_id', 'odom' )
+        self.declare_parameter('odom_child_frame_id','base_link')
 
         # DEVICE, MOTOR, AND INTRINSIC PARAMETERS
-        # ----------------------
-        self.declare_parameter('left_roboteq_port', DEFAULT_LEFT_SERIAL_PORT)
-        self.declare_parameter('right_roboteq_port', DEFAULT_RIGHT_SERIAL_PORT)
-        self.declare_parameter('gear_reduction_ratio', DEFAULT_GEAR_REDUCTION_RATIO)
-        self.declare_parameter('wheel_radius', DEFAULT_WHEEL_RADIUS)
-        self.declare_parameter('track_width', DEFAULT_TRACK_WIDTH) 
-        # ----------------------
+        self.declare_parameter('left_roboteq_port', '/dev/left_roboteq')
+        self.declare_parameter('right_roboteq_port', '/dev/right_roboteq')
+
+        fudge_val = 10 # No idea why this works. This is correct. Going to investigate at some point in the future. 
+        self.declare_parameter('gear_reduction_ratio', 0.027 * fudge_val)
+        self.declare_parameter('wheel_radius', 0.125)
+        self.declare_parameter('track_width', 0.77 ) 
 
         # SAFETY & MISC PARAMETERS
-        # ----------------------
-        self.declare_parameter('covariance_data_depth', DEFAULT_COVARIANCE_DATA_SET_MAX_DEPTH)
-        self.declare_parameter('debugging_state', DEFAULT_DEBUGGING)
-        self.declare_parameter('max_linear_speed', DEFAULT_MAX_METERS_PER_SECOND)
-        # ----------------------
+        self.declare_parameter('covariance_data_depth', 1000)
+        self.declare_parameter('debugging_state', False)
+        self.declare_parameter('max_linear_speed', 0.5)
 
-        # Creating the RoboteqSerialPort that corresponds to the left roboteq and right wheels of retailbot
+        self.runtime_queries = rt_runtime_queries()
+        self.runtime_commands = rt_runtime_commands()
+        self.tf_broadcaster = TransformBroadcaster(self)
+
+        self.current_x_position = 0.0
+        self.current_y_position = 0.0
+        self.current_theta_in_radians = 0.0
+
+        self.twist_data_list: list[list[int]] = [[],[],[],[],[],[]] 
+        self.pose_data_list: list[list[int]] = [[],[],[],[],[],[]] 
+
+        self.roboteq_odom_timer = self.create_timer(
+            timer_period_sec = (1.0 / self.get_parameter('odom_pub_rate_hz').get_parameter_value().double_value),
+            callback = self.generate_odom_and_tf
+            )
+
+        # Initializing the relative time used for velocity calculations
+        self.rel_time = self.get_clock().now().nanoseconds 
+
+        # Serial class parameters (will not change for the roboteqs, adding these constants for good practice)
+        DEFAULT_BAUD = 115200 # Bits per second / pulses per second (Value acceptable by roboteqs)
+        DEFAULT_TIMEOUT = 5 
+        MOTORS_PER_ROBOTEQ = 2 # Motors per Roboteq 
+
+        self.query_cmds = [
+                    ("Motor Amps",self.runtime_queries.Read_Motor_Amps),
+                    ("Relative Encoder Count",self.runtime_queries.Read_Encoder_Count_Relative),
+                    ("Absolute Encoder Count",self.runtime_queries.Read_Encoder_Counter_Absolute),
+                    ("Closed Loop Error",self.runtime_queries.Read_Closed_Loop_Error),
+                    ("Encoder RPM",self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM),
+                    ("Sensor Errors",self.runtime_queries.Read_Sensor_Errors),
+                    ("Temperature",self.runtime_queries.Read_Temperature),
+                    ("Firmware ID",self.runtime_queries.Read_Firmware_ID),
+                    ]
+
         self.left_roboteq = RoboteqSerialPort(
             port= self.get_parameter('left_roboteq_port').get_parameter_value().string_value,
             baudrate= DEFAULT_BAUD,
             timeout= DEFAULT_TIMEOUT,
             motor_count= MOTORS_PER_ROBOTEQ
-        )
+            )
 
-        # Connecting to the left serial port corresponding to the left roboteq on retailbot
-        self.left_roboteq.connect_serial()
-
-        # Creating the RoboteqSerialPort that corresponds to the right roboteq and right wheels of retailbot
         self.right_roboteq = RoboteqSerialPort(
             port= self.get_parameter('right_roboteq_port').get_parameter_value().string_value,
             baudrate= DEFAULT_BAUD,
             timeout= DEFAULT_TIMEOUT,
             motor_count= MOTORS_PER_ROBOTEQ
-        )
+            )
 
-        # Connecting to the right serial port corresponding to the right roboteq on retailbot
+        self.left_roboteq.connect_serial()
         self.right_roboteq.connect_serial()
         
-        # Creating the subscriber that will recieve Twist messages from the path planner or from teleoperation 
+
         self.cmd_vel_sub = self.create_subscription(
             msg_type= Twist,
             topic= self.get_parameter('cmd_vel_topic').get_parameter_value().string_value,
@@ -143,7 +127,6 @@ class Roboteq_Node(Node):
             qos_profile= 1
             )
         
-        # Creating the Publisher that will publish the Odometry message for the Roboteq
         self.roboteq_odom_pub = self.create_publisher(
             msg_type= Odometry,
             topic= self.get_parameter('odom_topic').get_parameter_value().string_value,
@@ -156,65 +139,30 @@ class Roboteq_Node(Node):
             qos_profile= 10
             )
         
-        self.runtime_queries = rt_runtime_queries()
-        self.runtime_commands = rt_runtime_commands()
-        self.query_cmds = [
-            ("Motor Amps",self.runtime_queries.Read_Motor_Amps),
-            ("Relative Encoder Count",self.runtime_queries.Read_Encoder_Count_Relative),
-            ("Absolute Encoder Count",self.runtime_queries.Read_Encoder_Counter_Absolute),
-            ("Closed Loop Error",self.runtime_queries.Read_Closed_Loop_Error),
-            ("Encoder RPM",self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM),
-            ("Sensor Errors",self.runtime_queries.Read_Sensor_Errors),
-            ("Temperature",self.runtime_queries.Read_Temperature),
-                                ]
-        
-        # Creating the Transform Broadcaster that will publish the ROS transform (odom => base_link)
-        self.tf_broadcaster = TransformBroadcaster(self)
-
-        # Initializing the Initial Position of retailbot
-        # **Note**:
-        #   The component-wise velocities of retailbot does not need to be stored at the
-        #   class level as this value is only used in integrating to find position and is  
-        #   pseduo-instantaneous when included inside of the published odometry message 
-        self.current_x_position = 0.0
-        self.current_y_position = 0.0
-        self.current_theta_in_radians = 0.0
-
-        # Initializing data lists used in covariance calculations
-        self.twist_data_list: list[list[int]] = [[],[],[],[],[],[]] 
-        self.pose_data_list: list[list[int]] = [[],[],[],[],[],[]] 
-
-        # Creating the timer that will periodically publish the odometry message to the odometry topic at the rate set by 'odom_pub_rate_hz'
-        self.roboteq_odom_timer = self.create_timer(
-            timer_period_sec = (1.0 / self.get_parameter('odom_pub_rate_hz').get_parameter_value().double_value),
-            callback = self.generate_odom_and_tf
-            )
-
-        # Initializing the relative time used for velocity calculations
-        self.rel_time = self.get_clock().now().nanoseconds 
-
-        # Displaying to terminal that the node's publisher and subscriber were properly generated 
-        self.get_logger().info(f'roboteq_node.py:\n' + \
-                               f'Odometry Outputs\nTopic: {self.roboteq_odom_pub.topic}\nMessage Type: {self.roboteq_odom_pub.msg_type}\n' + \
-                               f'Control Inputs\nTopic: {self.cmd_vel_sub.topic}\nMessage Type: {self.cmd_vel_sub.msg_type}\n')
-        
-
     def cmd_vel_callback(self, twist_msg: Twist):
         
-        gear_ratio = self.get_parameter('gear_reduction_ratio').get_parameter_value().double_value
-        cmd_vel_delay_sec = self.get_parameter('cmd_vel_delay_sec').get_parameter_value().double_value
-        track_width: float = self.get_parameter('track_width').get_parameter_value().double_value
-        wheel_radius: float = self.get_parameter('wheel_radius').get_parameter_value().double_value
-        max_rpm = (self.get_parameter('max_linear_speed').get_parameter_value().double_value) * (60.0/1.0) / (2.0 * math.pi * wheel_radius) 
+        def linear_vel(motor_side: str):
+            if motor_side.upper() == "RIGHT":
+                op = operator.add
+            elif motor_side.upper() == "LEFT":
+                op = operator.sub
+            else:
+                raise ValueError
+            return op(twist_msg.linear.x, twist_msg.angular.z * (self.get_parameter('track_width').get_parameter_value().double_value/2))
 
-        def clamp(value, minimum, maximum):
-            return max(minimum, min(value,maximum))
-    
-        right_speed = ( twist_msg.linear.x + twist_msg.angular.z * (track_width/2) ) # meters / second
-        left_speed  = ( twist_msg.linear.x - twist_msg.angular.z * (track_width/2) )  # meters / second
+        def calc_rpm(lin_vel): # m/s / rotations/m = rotations/sec * 60 = rotations/minute
+            gear_ratio: float = self.get_parameter('gear_reduction_ratio').get_parameter_value().double_value
+            wheel_radius: float = self.get_parameter('wheel_radius').get_parameter_value().double_value
+            max_rpm = (self.get_parameter('max_linear_speed').get_parameter_value().double_value) * (60.0/1.0) / (2.0 * math.pi * wheel_radius) 
 
-        right_rpm =  max_rpm * clamp((( right_speed / (wheel_radius * 2 * math.pi)) * 60 * gear_ratio),-1,1) # m/s / rotations/m = rotations/sec * 60 = rotations/minute
-        left_rpm = max_rpm * clamp((( left_speed / (wheel_radius * 2 * math.pi) ) * 60 * gear_ratio),-1,1) # m/s / rotations/m = rotations/sec * 60 = rotations/minute
+            def clamp(value, minimum, maximum):
+                return max(minimum, min(value,maximum))
+            
+            # (m/sec) / (rotations/m) = (rotations/sec) * (sec/minute) = (rotations/minute)
+            return max_rpm * clamp((( lin_vel / (wheel_radius * 2 * math.pi)) * 60 * gear_ratio),-1,1)
+
+        right_rpm =  calc_rpm(linear_vel('right')) 
+        left_rpm = calc_rpm(linear_vel('left')) 
 
         if(self.left_roboteq.is_open and self.right_roboteq.is_open):
             try:
@@ -224,17 +172,11 @@ class Roboteq_Node(Node):
             except Exception as serExcpt:
                 self.get_logger().warn(str(serExcpt))
 
-        if ( self.get_parameter('debugging_state').get_parameter_value().bool_value ):
-            self.get_logger().info('\ncmd_vel_callback:\n' + 
-                                   '    Recieved twist message: \n' + \
-                                   '    Linear X: ' + str(twist_msg.linear.x) + '\n' + \
-                                   '    Angular Z: ' + str(twist_msg.angular.z) + '\n' + \
-                                   '    Calculated Left RPM: ' + str(left_rpm) + '\n' + \
-                                   '    Calculated Right RPM ' + str(right_rpm) + '\n' 
-                                   )
-        
-        time.sleep(cmd_vel_delay_sec)
+        time.sleep(self.get_parameter('cmd_vel_delay_sec').get_parameter_value().double_value)
 
+        if ( self.get_parameter('debugging_state').get_parameter_value().bool_value ):
+            self.get_logger().info(f"\ncmd_vel_callback:\n      Calculated Left RPM: {left_rpm}\n       Calculated Right RPM: {left_rpm}\n")
+        
 
     def generate_odom_and_tf(self):
 
@@ -244,16 +186,25 @@ class Roboteq_Node(Node):
         curr_roboteq_data = RoboteqInfo()
         curr_roboteq_data.header.stamp = self.get_clock().now().to_msg()
         curr_roboteq_data.header.frame_id = self.get_parameter("odom_frame_id").get_parameter_value().string_value
-        curr_roboteq_data.data = [] 
+
+        curr_roboteq_data.front_left_motor_data = [] 
+        curr_roboteq_data.back_left_motor_data = [] 
+        curr_roboteq_data.front_right_motor_data = [] 
+        curr_roboteq_data.back_right_motor_data = []
+
         curr_roboteq_data.data_description = [] 
+
         for cmd_str, cmd in self.query_cmds:
             serial_output = self.left_roboteq.read_runtime_query(cmd) + self.right_roboteq.read_runtime_query(cmd)
             self.get_logger().info(f"{cmd_str}, {serial_output}")
-            curr_roboteq_data.data.append(serial_output)
+
             curr_roboteq_data.data_description.append(cmd_str)
+            curr_roboteq_data.front_left_motor_data.append(serial_output[0])
+            curr_roboteq_data.back_left_motor_data.append(serial_output[1])
+            curr_roboteq_data.front_right_motor_data.append(serial_output[2])
+            curr_roboteq_data.back_right_motor_data.append(serial_output[3])
+            
         self.roboteq_info_pub.publish(curr_roboteq_data)
-
-
         # Get all four wheel RPMS
         rpm_cmd = self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM
         rpm_query_output = self.left_roboteq.read_runtime_query(rpm_cmd) + self.right_roboteq.read_runtime_query(rpm_cmd)
@@ -268,7 +219,7 @@ class Roboteq_Node(Node):
 
         try:
             valid_rpm_value_list: list[int] = list(map(int,rpm_query_output))
-            gear_reduced_valid_rpm_values = [ (valid_rpm_value / DEFAULT_GEAR_REDUCTION_RATIO ) for valid_rpm_value in valid_rpm_value_list ]
+            gear_reduced_valid_rpm_values = [ (valid_rpm_value / self.get_parameter('gear_reduction_ratio').get_parameter_value().double_value ) for valid_rpm_value in valid_rpm_value_list ]
 
         except Exception as exception:
             self.get_logger().warn(str(exception))
