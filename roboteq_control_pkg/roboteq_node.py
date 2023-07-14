@@ -44,6 +44,9 @@ DEFAULT_ODOM_PUBLISH_RATE_HZ = 100.0 # Number of odom publishes per second
 
 DEFAULT_PUB_INFO_TOPIC = 'roboteq_info' # ROS topic this node publishes roboteq info to (std_msgs.msg Float32MultiArray)
 DEFAULT_INFO_PUBLISH_RATE_HZ = 5.0 # Number of info publishes per second
+
+DEFAULT_ODOM_FRAME_ID = 'odom' # Frame ID of the odometry message published by this node
+DEFAULT_ODOM_CHILD_FRAME_ID = 'base_link' # Child Frame ID of the odometry message published by this node
 # -------------
 
 
@@ -89,6 +92,9 @@ class Roboteq_Node(Node):
 
         self.declare_parameter('cmd_vel_topic', DEFAULT_SUB_CMD_VEL_TOPIC)
         self.declare_parameter('cmd_vel_delay_sec',DEFAULT_COMMAND_VEL_CALLBACK_DELAY)
+
+        self.declare_parameter('odom_frame_id',DEFAULT_ODOM_FRAME_ID)
+        self.declare_parameter('odom_child_frame_id',DEFAULT_ODOM_CHILD_FRAME_ID)
         # ----------------------
 
         # DEVICE, MOTOR, AND INTRINSIC PARAMETERS
@@ -145,21 +151,21 @@ class Roboteq_Node(Node):
             )
         
         self.roboteq_info_pub = self.create_publisher(
-            msg_type= Float32MultiArray,
+            msg_type= RoboteqInfo,
             topic= self.get_parameter('roboteq_info_topic').get_parameter_value().string_value,
             qos_profile= 10
             )
         
         self.runtime_queries = rt_runtime_queries()
         self.runtime_commands = rt_runtime_commands()
-        self.query_addresses = [
-            self.runtime_queries.Read_Motor_Amps,
-            self.runtime_queries.Read_Encoder_Count_Relative,
-            self.runtime_queries.Read_Encoder_Counter_Absolute,
-            self.runtime_queries.Read_Closed_Loop_Error,
-            self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM,
-            self.runtime_queries.Read_Sensor_Errors,
-            self.runtime_queries.Read_Temperature,
+        self.query_cmds = [
+            ("Motor Amps",self.runtime_queries.Read_Motor_Amps),
+            ("Relative Encoder Count",self.runtime_queries.Read_Encoder_Count_Relative),
+            ("Absolute Encoder Count",self.runtime_queries.Read_Encoder_Counter_Absolute),
+            ("Closed Loop Error",self.runtime_queries.Read_Closed_Loop_Error),
+            ("Encoder RPM",self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM),
+            ("Sensor Errors",self.runtime_queries.Read_Sensor_Errors),
+            ("Temperature",self.runtime_queries.Read_Temperature),
                                 ]
         
         # Creating the Transform Broadcaster that will publish the ROS transform (odom => base_link)
@@ -235,10 +241,23 @@ class Roboteq_Node(Node):
         wheel_radius = self.get_parameter('wheel_radius').get_parameter_value().double_value
         track_width = self.get_parameter('track_width').get_parameter_value().double_value
 
-        rpm_cmd = self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM
+        curr_roboteq_data = RoboteqInfo()
+        curr_roboteq_data.header.stamp = self.get_clock().now().to_msg()
+        curr_roboteq_data.header.frame_id = self.get_parameter("odom_frame_id").get_parameter_value().string_value
+        curr_roboteq_data.data = [] 
+        curr_roboteq_data.data_description = [] 
+        for cmd_str, cmd in self.query_cmds:
+            serial_output = self.left_roboteq.read_runtime_query(cmd) + self.right_roboteq.read_runtime_query(cmd)
+            self.get_logger().info(f"{cmd_str}, {serial_output}")
+            curr_roboteq_data.data.append(serial_output)
+            curr_roboteq_data.data_description.append(cmd_str)
+        self.roboteq_info_pub.publish(curr_roboteq_data)
+
 
         # Get all four wheel RPMS
+        rpm_cmd = self.runtime_queries.Read_Encoder_Motor_Speed_in_RPM
         rpm_query_output = self.left_roboteq.read_runtime_query(rpm_cmd) + self.right_roboteq.read_runtime_query(rpm_cmd)
+
 
         # **Note**:
         #   This layout assumes that for the time of the calculation, retailbot is traveling at the 
@@ -248,8 +267,8 @@ class Roboteq_Node(Node):
         self.rel_time = curr_time
 
         try:
-            valid_rpm_values: list[int] = list(map(int,rpm_query_output))
-            gear_reduced_valid_rpm_values = [ (valid_rpm_value / DEFAULT_GEAR_REDUCTION_RATIO ) for valid_rpm_value in valid_rpm_values ]
+            valid_rpm_value_list: list[int] = list(map(int,rpm_query_output))
+            gear_reduced_valid_rpm_values = [ (valid_rpm_value / DEFAULT_GEAR_REDUCTION_RATIO ) for valid_rpm_value in valid_rpm_value_list ]
 
         except Exception as exception:
             self.get_logger().warn(str(exception))
@@ -286,9 +305,8 @@ class Roboteq_Node(Node):
         # http://docs.ros.org/en/noetic/api/nav_msgs/html/msg/Odometry.html
         odometry_message = Odometry()
         odometry_message.header.stamp = self.get_clock().now().to_msg()
-        odometry_message.header.frame_id = "odom"
-        odometry_message.child_frame_id = "base_link"
-
+        odometry_message.header.frame_id = self.get_parameter("odom_frame_id").get_parameter_value().string_value
+        odometry_message.child_frame_id = self.get_parameter("odom_child_frame_id").get_parameter_value().string_value
 
         # --------------------------------------------------
         # Pose with Covariance (Positions)
@@ -361,9 +379,9 @@ class Roboteq_Node(Node):
         # Making the Transform Message
         # http://docs.ros.org/en/noetic/api/geometry_msgs/html/msg/TransformStamped.html
         transform_message = TransformStamped()
-        transform_message.header.frame_id = "odom"
+        transform_message.header.frame_id = self.get_parameter("odom_frame_id").get_parameter_value().string_value
         transform_message.header.stamp = self.get_clock().now().to_msg()
-        transform_message.child_frame_id = "base_link"
+        transform_message.child_frame_id = self.get_parameter("odom_child_frame_id").get_parameter_value().string_value
         transform_message.transform.translation.x = self.current_x_position
         transform_message.transform.translation.y = self.current_y_position
         transform_message.transform.translation.z = 0.0

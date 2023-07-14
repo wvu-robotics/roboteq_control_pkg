@@ -116,7 +116,7 @@ class RoboteqSerialPort(serial.Serial):
             query_char = '?'
             if len(cmd_str) > self.runtime_queries_max_len:
                 Exception("Invalid command length for runtime queries.")
-            query_returns: list[str]= [] 
+            query_returns: list[str] = [] 
             # removing unvalid characters from the read byte string
             for motor_num in range(self.motor_count):
                 # Creating the serial command in the correct format and writing to the port
@@ -190,11 +190,3 @@ class RoboteqSerialPort(serial.Serial):
         except serial.SerialException as serExcpt:
             print(str(serExcpt))
             return False
-        
-
-right_roboteq = RoboteqSerialPort(
-            port= '/dev/left_roboteq',
-            baudrate= 115200,
-            timeout= 5,
-            motor_count= 2
-        )
