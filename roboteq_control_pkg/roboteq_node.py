@@ -34,6 +34,17 @@ from retailbot_interfaces.msg import RoboteqInfo
 from .roboteq_serial_port import RoboteqSerialPort
 from .roboteq_constants import rt_runtime_queries, rt_runtime_commands
 
+
+'''
+Important Note:
+
+Right Motor 1 -> Back Right
+Right Motor 2 -> Front Right
+Left Motor 1 -> Front Left
+Left Motor 2 -> Back Left 
+
+'''
+
 class Roboteq_Node(Node):
 
     def __init__(self):
@@ -195,14 +206,18 @@ class Roboteq_Node(Node):
         curr_roboteq_data.data_description = [] 
 
         for cmd_str, cmd in self.query_cmds:
+
+            # Left 1, Left 2, Right 1, Right 2
+            # Front Left, Back Left, Back Right, Front Right
             serial_output = self.left_roboteq.read_runtime_query(cmd) + self.right_roboteq.read_runtime_query(cmd)
             self.get_logger().info(f"{cmd_str}, {serial_output}")
 
             curr_roboteq_data.data_description.append(cmd_str)
             curr_roboteq_data.front_left_motor_data.append(serial_output[0])
-            curr_roboteq_data.back_left_motor_data.append(serial_output[1])
-            curr_roboteq_data.front_right_motor_data.append(serial_output[2])
-            curr_roboteq_data.back_right_motor_data.append(serial_output[3])
+            curr_roboteq_data.back_left_motor_data.append(serial_output[1]) 
+            curr_roboteq_data.back_right_motor_data.append(serial_output[2])
+            curr_roboteq_data.front_right_motor_data.append(serial_output[3]) 
+
             
         self.roboteq_info_pub.publish(curr_roboteq_data)
         # Get all four wheel RPMS
